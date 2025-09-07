@@ -11,6 +11,7 @@ import {
   replaceVariables,
 } from "./css_parser.js";
 
+import { getFonts, downloadFonts } from "./fonts.js";
 import * as CSSwhat from "css-what";
 
 const ELEMENT_NODE = 1;
@@ -104,6 +105,14 @@ async function traverse(node, callback, parallel = false) {
     // must reboot (or change url?) to fix
     await Page.loadEventFired();
 
+    // download fonts
+    const { result } = await Runtime.evaluate({
+      expression: getFonts.toString() + "; getFonts();",
+      returnByValue: true,
+    });
+    const { fontCSS, fontFiles } = result.value;
+    await downloadFonts(fontCSS, fontFiles);
+
     // TODO: collect all @font-face rules and download fonts
 
     const { root: docRoot } = await DOM.getDocument({ depth: -1 });
@@ -135,6 +144,7 @@ async function traverse(node, callback, parallel = false) {
         computedStyleSets[prop.name].add(prop.value);
       }
     */
+
     var total = 0;
 
     async function collectNodeComputedStyle(node) {
@@ -146,6 +156,7 @@ async function traverse(node, callback, parallel = false) {
     }
 
     await traverse(root, collectNodeComputedStyle, true);
+
     /*
     var l = 0;
     for (const [prop, values] of Object.entries(computedStyles)) {
@@ -398,7 +409,8 @@ async function traverse(node, callback, parallel = false) {
     const { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
     // Save to file
     //console.log(outerHTML);
-    fs.writeFileSync("./out/cdp.html", outerHTML, "utf-8");
+    const fontLinkTag = '<link rel="stylesheet" href="./fonts.css" />\n';
+    fs.writeFileSync("./out/cdp.html", fontLinkTag + outerHTML, "utf-8");
     console.log("✅ HTML with inline styles saved to cdp.html");
     process.exit(0);
   } catch (err) {
