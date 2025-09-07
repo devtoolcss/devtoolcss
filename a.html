@@ -1,0 +1,35 @@
+<style>
+  html {
+    --html: green;
+  }
+
+  a {
+    display: block;
+    --GG: black;
+    color: var(--html);
+  }
+  a:hover:active,
+  a:active:hover,
+  a:hover:not(.foo),
+  a:hover {
+    text-decoration: none;
+    outline: none;
+    --GG: red;
+  }
+
+  body:hover > a {
+    color: red;
+  }
+
+  body {
+    background-color: white;
+  }
+
+  body:hover {
+    background-color: yellow;
+  }
+</style>
+
+<body id="bd" style="color: blue !important">
+  <a href="#">Link</a>
+</body>
