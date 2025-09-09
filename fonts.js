@@ -3,15 +3,29 @@ import https from "https";
 import http from "http";
 import { URL } from "url";
 
-export function getFonts() {
-  let fontCSS = "";
-  let fontFiles = [];
-  let counter = 0;
+export const MIME = [
+  "application",
+  "audio",
+  "example",
+  "font",
+  "image",
+  "model",
+  "text",
+  "video",
+];
 
-  function getExtension(url) {
-    const match = url.match(/\.([a-z0-9]+)(?:\?|%3F|#|$)/i);
-    return match ? "." + match[1].toLowerCase() : ".bin";
-  }
+export function getExtension(url) {
+  const match = url.match(/\.([a-z0-9]+)(?:\?|%3F|#|$)/i);
+  return match ? "." + match[1].toLowerCase() : ".bin";
+}
+
+export function getFilename(url) {
+  const lastSegment = url.substring(url.lastIndexOf("/") + 1);
+  return decodeURIComponent(lastSegment.replace(/([#?]|%3F).*$/, ""));
+}
+
+export function getFonts(fontFiles) {
+  let fontCSS = "";
 
   for (const sheet of document.styleSheets) {
     try {
@@ -19,31 +33,28 @@ export function getFonts() {
         if (rule.type === CSSRule.FONT_FACE_RULE) {
           let cssText = rule.cssText;
 
-          cssText = cssText.replace(
-            /url\(["']?([^"')]+)["']?\)/g,
-            (match, url) => {
-              try {
-                // keep data: URLs untouched
-                if (url.startsWith("data:")) {
-                  return match;
-                }
+          //const urlMatch = cssText.match(/url\(["']?([^"')]+)["']?\)/);
+          const urlMatch = cssText.match(/url\(([^)]*?)\)/);
+          const url = urlMatch ? urlMatch[1] : null;
+          if (!url) continue;
 
-                // resolve relative/absolute URL
-                const fullUrl = new URL(url, sheet.href || location.href).href;
-                const ext = getExtension(fullUrl);
-                const filename = `${counter}${ext}`;
-
-                fontFiles.push({ url: fullUrl, filename });
-
-                counter++;
-                return `url("./fonts/${filename}")`;
-              } catch {
-                return match;
+          if (url.match(/^['"]?\s*(data:|blob:)/)) {
+            fontCSS += cssText + "\n";
+          } else {
+            for (const fontFile of fontFiles) {
+              if (
+                url.includes(fontFile) ||
+                url.includes(encodeURIComponent(fontFile))
+              ) {
+                cssText = cssText.replace(
+                  /url\(([^)]*?)\)/g,
+                  `url('./assets/font/${fontFile}')`
+                );
+                fontCSS += cssText + "\n";
+                break;
               }
             }
-          );
-
-          fontCSS += cssText + "\n";
+          }
         }
       }
     } catch (err) {
@@ -53,10 +64,10 @@ export function getFonts() {
 
   //console.log("Rewritten CSS:\n", fontCSS);
   //console.log("Font file mapping:", fontFiles);
-  return { fontCSS, fontFiles };
+  return fontCSS;
 }
 
-function downloadFile(url, dest) {
+export async function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const mod = parsedUrl.protocol === "https:" ? https : http;

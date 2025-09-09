@@ -11,7 +11,13 @@ import {
   replaceVariables,
 } from "./css_parser.js";
 
-import { getFonts, downloadFonts } from "./fonts.js";
+import {
+  getFilename,
+  getFonts,
+  downloadFile,
+  MIME,
+  getExtension,
+} from "./fonts.js";
 import * as CSSwhat from "css-what";
 
 const ELEMENT_NODE = 1;
@@ -94,26 +100,62 @@ async function traverse(node, callback, parallel = false) {
       mobile: false,
     });
 
-    const { DOM, CSS, Page, Runtime } = client;
+    const { DOM, CSS, Page, Runtime, Network } = client;
     await DOM.enable();
     await CSS.enable();
     await Page.enable();
+    await Network.enable();
+    await Network.setCacheDisabled({ cacheDisabled: true });
+
+    const requests = {};
+    Network.on("responseReceived", (param) => {
+      const url = param.response.url;
+      if (url.startsWith("data:")) return;
+      const filename = getFilename(url);
+      const [type, subtype] = param.response.mimeType.split("/");
+      if (["html", "javascript", "css"].includes(subtype)) return;
+      try {
+        if (
+          subtype === "octet-stream" &&
+          [".html", ".js", ".css"].includes(getExtension(filename))
+        )
+          return;
+      } catch {}
+
+      /*
+      if (["html", "javascript", "css"].includes(subtype)) {
+        // can be octet-stream
+        console.log("skip", getFilename(param.response.url), subtype);
+        return;
+      }
+      */
+      requests[param.requestId] = { url, filename, type };
+    });
+    Network.on("loadingFinished", async (param) => {
+      const requestId = param.requestId;
+      if (
+        !requests[requestId] ||
+        ["audio", "video"].includes(requests[requestId].type)
+      ) {
+        return;
+      }
+
+      const { body, base64Encoded } = await Network.getResponseBody({
+        requestId: requestId,
+      });
+      requests[requestId].base64Encoded = base64Encoded;
+      requests[requestId].data = body;
+    });
 
     await Page.navigate({ url: "http://localhost:8080/index.html" });
     // BUG: not sure why after testing with --headless, it doesn't navigate at all
     // leading to wrong inline style (somehow correct stylesheets?)
     // must reboot (or change url?) to fix
     await Page.loadEventFired();
-
-    // download fonts
-    const { result } = await Runtime.evaluate({
-      expression: getFonts.toString() + "; getFonts();",
-      returnByValue: true,
+    // trigger all lazyloading
+    await Runtime.evaluate({
+      expression: "window.scrollTo(0, document.body.scrollHeight);",
     });
-    const { fontCSS, fontFiles } = result.value;
-    await downloadFonts(fontCSS, fontFiles);
-
-    // TODO: collect all @font-face rules and download fonts
 
     const { root: docRoot } = await DOM.getDocument({ depth: -1 });
 
@@ -396,6 +438,53 @@ async function traverse(node, callback, parallel = false) {
     //console.log(root.children[0].css);
     //console.log(root.children[0].styleSheet);
 
+    console.log("Downloading files...");
+    if (fs.existsSync("./out/assets/")) {
+      fs.rmSync("./out/assets/", { recursive: true, force: true });
+    }
+    for (const mimeType of MIME) {
+      fs.mkdirSync(`./out/assets//${mimeType}`, { recursive: true });
+    }
+
+    const fontFiles = [];
+    for (const req of Object.values(requests)) {
+      const { type, url, data, base64Encoded } = req;
+      const filename = getFilename(url);
+      if (type && filename) {
+        const path = `./out/assets/${type}/${filename}`;
+        console.log("saving", url, "to", path);
+        if (type === "audio" || type === "video") {
+          await downloadFile(url, path);
+        } else {
+          if (type === "font") {
+            fontFiles.push(filename);
+          }
+          const filePath = path;
+          const buffer = base64Encoded
+            ? Buffer.from(data, "base64")
+            : Buffer.from(data);
+          fs.writeFileSync(filePath, buffer);
+        }
+      }
+    }
+    for (const mimeType of MIME) {
+      const dirPath = `./out/assets/${mimeType}`;
+      if (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length === 0) {
+        fs.rmdirSync(dirPath);
+      }
+    }
+
+    console.log("Rewriting font CSS...");
+    console.log(fontFiles);
+    const { result } = await Runtime.evaluate({
+      expression:
+        getFonts.toString() + `; getFonts(${JSON.stringify(fontFiles)});`,
+      returnByValue: true,
+    });
+    const fontCSS = result.value;
+    fs.writeFileSync("./out/fonts.css", fontCSS, "utf-8");
+    const fontLinkTag = '<link rel="stylesheet" href="./fonts.css" />\n';
+
     console.log("Inlining style...");
     await Runtime.evaluate({
       expression:
@@ -407,9 +496,8 @@ async function traverse(node, callback, parallel = false) {
 
     // Get the updated HTML with inline styles
     const { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
+
     // Save to file
-    //console.log(outerHTML);
-    const fontLinkTag = '<link rel="stylesheet" href="./fonts.css" />\n';
     fs.writeFileSync("./out/cdp.html", fontLinkTag + outerHTML, "utf-8");
     console.log("✅ HTML with inline styles saved to cdp.html");
     process.exit(0);

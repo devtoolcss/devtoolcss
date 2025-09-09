@@ -59,12 +59,11 @@ export function getNormalizedSuffix(parsedSelector) {
   const pseudoClasses = [];
   var pseudoElement = null;
   for (var i = parsedSelector.length - 1; i >= 0; --i) {
-    if (
-      parsedSelector[i].type === "pseudo" &&
-      // exclude functional pseudo-classes
-      !parsedSelector[i].data
-    ) {
-      pseudoClasses.push(":" + parsedSelector[i].name);
+    if (parsedSelector[i].type === "pseudo") {
+      if (!parsedSelector[i].data) {
+        // exclude functional pseudo-classes
+        pseudoClasses.push(":" + parsedSelector[i].name);
+      }
     } else if (parsedSelector[i].type === "pseudo-element") {
       pseudoElement = "::" + parsedSelector[i].name;
     } else {
