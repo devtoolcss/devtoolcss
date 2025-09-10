@@ -3,6 +3,8 @@
   "dependencies": {
     "chrome-remote-interface": "^0.33.3",
     "css-what": "^7.0.0",
+    "escape-html": "^1.0.3",
+    "escape-string-regexp": "^5.0.0",
     "jsdom": "^26.1.0",
     "postcss-var-replace": "^1.0.0"
   },

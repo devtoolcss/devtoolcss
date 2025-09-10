@@ -19,6 +19,8 @@ import {
   getExtension,
 } from "./fonts.js";
 import * as CSSwhat from "css-what";
+import escapeHTML from "escape-html";
+import escapeStringRegexp from "escape-string-regexp";
 
 const ELEMENT_NODE = 1;
 
@@ -446,16 +448,19 @@ async function traverse(node, callback, parallel = false) {
       fs.mkdirSync(`./out/assets//${mimeType}`, { recursive: true });
     }
 
+    const urls = new Set();
     const fontFiles = [];
     for (const req of Object.values(requests)) {
       const { type, url, data, base64Encoded } = req;
       const filename = getFilename(url);
       if (type && filename) {
         const path = `./out/assets/${type}/${filename}`;
+        const urlPath = `./assets/${type}/${filename}`;
         console.log("saving", url, "to", path);
         if (type === "audio" || type === "video") {
           await downloadFile(url, path);
-        } else {
+          urls.add({ url, path: urlPath });
+        } else if (data) {
           if (type === "font") {
             fontFiles.push(filename);
           }
@@ -464,6 +469,8 @@ async function traverse(node, callback, parallel = false) {
             ? Buffer.from(data, "base64")
             : Buffer.from(data);
           fs.writeFileSync(filePath, buffer);
+          urls.add({ url, path: urlPath });
+        } else if (data) {
         }
       }
     }
@@ -475,7 +482,6 @@ async function traverse(node, callback, parallel = false) {
     }
 
     console.log("Rewriting font CSS...");
-    console.log(fontFiles);
     const { result } = await Runtime.evaluate({
       expression:
         getFonts.toString() + `; getFonts(${JSON.stringify(fontFiles)});`,
@@ -495,7 +501,58 @@ async function traverse(node, callback, parallel = false) {
     });
 
     // Get the updated HTML with inline styles
-    const { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
+    var { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
+
+    // TODO: rewrite links
+    for (const { url, path } of urls) {
+      const pathEscaped = escapeHTML(path);
+      //if (url.startsWith("http")) { // url must start with http
+      const urlObj = new URL(url);
+      const pathUri = urlObj.pathname.slice(1) + urlObj.search + urlObj.hash;
+      const urlDecoded = decodeURI(url);
+      // Escape special regex characters in url and urlPath
+      // Replace all occurrences of url and urlPath with path
+      // Replace only URLs that are quoted by ' or "
+      for (const target of [url, urlDecoded]) {
+        outerHTML = outerHTML
+          .replace(
+            new RegExp(
+              `(['"])\\s*${escapeStringRegexp(escapeHTML(target))}\\s*\\1`,
+              "g"
+            ),
+            `"${pathEscaped}"`
+          )
+          .replace(
+            // in <style> tag, no html escape
+            // TODO: different escape format? ex: amp
+            new RegExp(`(['"])\\s*${escapeStringRegexp(target)}\\s*\\1`, "g"),
+            `"${path}"`
+          );
+      }
+      //}
+      // replace path-only uri
+      // ./ or / or without are the same, all base origin
+      const pathUriDecoded = decodeURI(pathUri);
+      for (const target of [pathUri, pathUriDecoded]) {
+        outerHTML = outerHTML
+          .replace(
+            new RegExp(
+              `(['"])\\s*(\.\/?)?${escapeStringRegexp(
+                escapeHTML(target)
+              )}\\s*\\1`,
+              "g"
+            ),
+            `"${pathEscaped}"`
+          )
+          .replace(
+            new RegExp(
+              `(['"])\\s*(\.\/?)?${escapeStringRegexp(target)}\\s*\\1`,
+              "g"
+            ),
+            `"${path}"`
+          );
+      }
+    }
 
     // Save to file
     fs.writeFileSync("./out/cdp.html", fontLinkTag + outerHTML, "utf-8");
