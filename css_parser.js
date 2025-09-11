@@ -1,4 +1,3 @@
-import * as CSSwhat from "css-what";
 import postcss from "postcss";
 import { postcssVarReplace } from "postcss-var-replace";
 
