@@ -651,70 +651,68 @@ function cleanup() {
   if (browserProc) browserProc.kill();
 }
 
-(async function () {
-  try {
-    process.on("SIGINT", () => {
-      cleanup();
-      process.exit(0);
-    });
-    process.on("SIGTERM", () => {
-      cleanup();
-      process.exit(0);
-    });
-    process.on("exit", cleanup);
-
-    const rootURLObj = new URL("http://localhost:8080");
-    const rootURL = rootURLObj.origin + rootURLObj.pathname;
-    let pageQueue = [rootURL];
-    const seenURLs = new Set();
-    if (rootURL.endsWith("/")) seenURLs.add(rootURL + "index.html");
-    baseDir = "./out";
-    assetDir = path.join(baseDir, "/assets");
-    // wait browser
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    //setup dir
-    if (fs.existsSync(baseDir)) {
-      fs.rmSync(baseDir, { recursive: true, force: true });
-    }
-    for (const mimeType of MIME) {
-      fs.mkdirSync(path.join(assetDir, mimeType), { recursive: true });
-    }
-
-    while (pageQueue.length !== 0) {
-      const url = pageQueue.shift();
-
-      const links = await crawl(url);
-      seenURLs.add(url);
-
-      const newLinks = links.filter((link) => {
-        if (!seenURLs.has(link)) {
-          if (link.endsWith("/")) seenURLs.add(link + "index.html");
-          seenURLs.add(link);
-          return true;
-        }
-      });
-      pageQueue = pageQueue.concat(newLinks);
-      //console.log("concat:", newLinks);
-      console.log(pageQueue);
-      console.log(pageQueue.length);
-    }
-
-    const fontCSSPath = path.join(baseDir, "fonts.css");
-    console.log(`Writing ${fontCSSPath}`);
-    fs.writeFileSync(fontCSSPath, [...fontCSSSet].join("\n"), "utf-8");
-    console.log("visited", [...seenURLs]);
-
-    // cleanup empty dir
-    for (const mimeType of MIME) {
-      const dirPath = path.join(assetDir, mimeType);
-      if (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length === 0) {
-        fs.rmdirSync(dirPath);
-      }
-    }
-  } catch (err) {
-    console.error(err);
-  } finally {
+try {
+  process.on("SIGINT", () => {
+    cleanup();
     process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on("exit", cleanup);
+
+  const rootURLObj = new URL("http://localhost:8080");
+  const rootURL = rootURLObj.origin + rootURLObj.pathname;
+  let pageQueue = [rootURL];
+  const seenURLs = new Set();
+  if (rootURL.endsWith("/")) seenURLs.add(rootURL + "index.html");
+  baseDir = "./out";
+  assetDir = path.join(baseDir, "/assets");
+  // wait browser
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  //setup dir
+  if (fs.existsSync(baseDir)) {
+    fs.rmSync(baseDir, { recursive: true, force: true });
   }
-})();
+  for (const mimeType of MIME) {
+    fs.mkdirSync(path.join(assetDir, mimeType), { recursive: true });
+  }
+
+  while (pageQueue.length !== 0) {
+    const url = pageQueue.shift();
+
+    const links = await crawl(url);
+    seenURLs.add(url);
+
+    const newLinks = links.filter((link) => {
+      if (!seenURLs.has(link)) {
+        if (link.endsWith("/")) seenURLs.add(link + "index.html");
+        seenURLs.add(link);
+        return true;
+      }
+    });
+    pageQueue = pageQueue.concat(newLinks);
+    //console.log("concat:", newLinks);
+    console.log(pageQueue);
+    console.log(pageQueue.length);
+  }
+
+  const fontCSSPath = path.join(baseDir, "fonts.css");
+  console.log(`Writing ${fontCSSPath}`);
+  fs.writeFileSync(fontCSSPath, [...fontCSSSet].join("\n"), "utf-8");
+  console.log("visited", [...seenURLs]);
+
+  // cleanup empty dir
+  for (const mimeType of MIME) {
+    const dirPath = path.join(assetDir, mimeType);
+    if (fs.existsSync(dirPath) && fs.readdirSync(dirPath).length === 0) {
+      fs.rmdirSync(dirPath);
+    }
+  }
+} catch (err) {
+  console.error(err);
+} finally {
+  process.exit(0);
+}
