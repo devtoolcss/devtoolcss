@@ -2,11 +2,6 @@ import fs from "fs";
 import CDP from "chrome-remote-interface";
 import { exec } from "child_process";
 import {
-  pseudoClasses,
-  hasPseudoClass,
-  parseCSSProperties,
-  getNormalizedSuffix,
-  isEffectivePseudoElem,
   toStyleSheet,
   replaceVariables,
   toInlineStyleJSON,
@@ -18,7 +13,10 @@ import { rewriteLinks } from "./rewrite.js";
 
 import { inlineStyle, cleanTags, getFonts, getAnchorHref } from "./runtime.js";
 
-import * as CSSwhat from "css-what";
+import { cascade, cascadePseudoClass } from "./cascade.js";
+
+import { getPath, getOrigin } from "./url.js";
+
 import cliProgress from "cli-progress";
 import path from "path";
 
@@ -48,95 +46,6 @@ async function traverse(node, callback, parallel = false) {
     }
   }
 }
-
-function getPath(url) {
-  const urlObj = new URL(url);
-  return urlObj.pathname;
-}
-
-function getOrigin(url) {
-  const urlObj = new URL(url);
-  return urlObj.origin;
-}
-
-/*
-async function crawlTest(pageURL) {
-  // seems that each client is a tab, a tab is a ws connection
-  const target = await CDP.New();
-  console.log("Connecting to browser...");
-  const client = await CDP({ target: target.id });
-  console.log("Connected!");
-
-  await client.Emulation.setDeviceMetricsOverride({
-    width: 1280, // my browser's fullscreen innerWidth/Height
-    height: 720,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-
-  const { DOM, CSS, Page, Runtime, Network } = client;
-
-  // enable events
-  await DOM.enable();
-  await CSS.enable();
-  await Page.enable();
-  await Network.enable();
-
-  console.log(`Loading "${pageURL}" ...`);
-  // BUG: not sure why after testing with --headless, it doesn't navigate at all
-  // leading to wrong inline style (somehow correct stylesheets?)
-  // must reboot (or change url?) to fix
-  const navResult = await Page.navigate({
-    url: pageURL,
-  });
-  if (navResult.errorText) {
-    throw new Error(`Navigation failed: ${navResult.errorText}`);
-  }
-  await Page.loadEventFired();
-  console.log("Loaded!");
-  // trigger all lazyloading
-  await Runtime.evaluate({
-    expression: "window.scrollTo(0, document.body.scrollHeight);",
-  });
-
-  const { result: resultLinks } = await Runtime.evaluate({
-    expression: getAnchorHref.toString() + "; getAnchorHref();",
-    returnByValue: true,
-  });
-  const links = resultLinks.value;
-
-  await client.close();
-  await CDP.Close({ id: target.id });
-  const origin = getOrigin(pageURL);
-
-  function filterPageUrls(origin, links) {
-    const results = [];
-
-    for (const link of links) {
-      try {
-        // Normalize to absolute URL
-        const url = new URL(link, origin);
-
-        // Check same origin
-        if (url.origin !== origin) {
-          continue;
-        }
-
-        // Heuristic: treat URLs with "file-like" extensions as not pages
-        const fileExt = url.pathname.split(".").pop().toLowerCase();
-        // prettier-ignore
-        const nonPageExts=["pdf","jpg","jpeg","png","gif","svg","zip","exe","mp4","mp3","webm"];
-        const isFile = nonPageExts.includes(fileExt);
-        if (!isFile) results.push(url.origin + url.pathname);
-      } catch (e) {}
-    }
-
-    return results;
-  }
-
-  return filterPageUrls(origin, links);
-}
-*/
 
 async function crawl(pageURL) {
   // seems that each client is a tab, a tab is a ws connection
@@ -269,168 +178,6 @@ async function crawl(pageURL) {
     */
   //console.log(total); // 932
 
-  async function cascade(node) {
-    //BUG: sometimes svg or some div nodeId=0
-    const css = { "": {} };
-
-    try {
-      var {
-        inherited,
-        inlineStyle,
-        attributesStyle,
-        matchedCSSRules,
-        pseudoElements,
-      } = await CSS.getMatchedStylesForNode({ nodeId: node.nodeId });
-
-      if (inherited) {
-        for (let i = inherited.length - 1; i >= 0; i--) {
-          const inheritedStyle = inherited[i];
-          if (inheritedStyle.inlineStyle) {
-            parseCSSProperties(
-              inheritedStyle.inlineStyle.cssProperties,
-              css[""],
-              true
-            );
-          }
-          if (inheritedStyle.matchedCSSRules) {
-            for (const rule of inheritedStyle.matchedCSSRules) {
-              if (rule.rule.origin !== "regular") continue;
-              parseCSSProperties(rule.rule.style.cssProperties, css[""], true);
-            }
-          }
-        }
-      }
-
-      if (attributesStyle)
-        parseCSSProperties(attributesStyle.cssProperties, css[""]);
-
-      for (const rule of matchedCSSRules) {
-        if (rule.rule.origin !== "regular") continue;
-        parseCSSProperties(rule.rule.style.cssProperties, css[""]);
-      }
-
-      if (inlineStyle) parseCSSProperties(inlineStyle.cssProperties, css[""]);
-
-      for (const match of pseudoElements) {
-        //match.pseudoType
-        if (isEffectivePseudoElem(match, node)) {
-          for (const rule of match.matches) {
-            if (rule.rule.origin !== "regular") continue;
-            const key = "::" + match.pseudoType;
-            parseCSSProperties(
-              rule.rule.style.cssProperties,
-              (css[key] = css[key] || {})
-            );
-          }
-        }
-      }
-      // normal css always not important
-      /*
-        Object.entries(css).forEach(([key, value]) => {
-          Object.values(value).forEach((prop) => {
-            prop.important = false;
-          });
-        });
-        */
-
-      node.css = css;
-    } catch (error) {
-      console.error("cascade", error);
-    }
-  }
-
-  async function cascadePseudoClass(node) {
-    try {
-      const pseudoCss = {};
-      //BUG: sometimes svg or some div nodeId=0
-      /*
-        const propertiesToTrack = [
-          { name: "color", value: "black" },
-          //{ name: "color", value: "red" },
-        ];
-        for (const [name, values] of Object.entries(computedStyles)) {
-          for (const value of values) {
-            propertiesToTrack.push({ name, value });
-          }
-        }
-        console.log("nodeId", node.children[0].nodeId);
-
-        await CSS.trackComputedStyleUpdates({
-          propertiesToTrack,
-        });
-
-        console.log("takeComputedStyleUpdates");
-        const p = CSS.takeComputedStyleUpdates();
-        */
-
-      await CSS.forcePseudoState({
-        nodeId: node.nodeId,
-        forcedPseudoClasses: pseudoClasses,
-      });
-
-      /*
-        console.log("await takeComputedStyleUpdates");
-        const UpdatedNodeIds = await p;
-        console.log("updated nodes", UpdatedNodeIds);
-
-        await CSS.trackComputedStyleUpdates({ propertiesToTrack: [] });
-        */
-
-      var { matchedCSSRules, pseudoElements } =
-        await CSS.getMatchedStylesForNode({ nodeId: node.nodeId });
-
-      // TODO: pseudoVars for overridden
-      // also cascade with non-pseudo and compare to ensure overridden
-
-      function iteratePseudo(rules) {
-        for (const rule of rules) {
-          if (rule.rule.origin !== "regular") continue;
-          const matchingSelectors = rule.matchingSelectors.map(
-            (i) => rule.rule.selectorList.selectors[i].text
-          );
-          for (const selector of matchingSelectors) {
-            const parsedSelector = CSSwhat.parse(selector)[0];
-            if (hasPseudoClass(parsedSelector)) {
-              const suffix = getNormalizedSuffix(parsedSelector);
-              if (!suffix) continue;
-              parseCSSProperties(
-                rule.rule.style.cssProperties,
-                (pseudoCss[suffix] = pseudoCss[suffix] || {})
-              );
-            }
-          }
-        }
-      }
-
-      iteratePseudo(matchedCSSRules);
-      for (const match of pseudoElements) {
-        if (isEffectivePseudoElem(match, node)) {
-          iteratePseudo(match.matches);
-        }
-      }
-
-      // TODO: to solve hover a and show b problem, use nodeId as id and construct #a #b selector.
-      // select right pseudo class by search the : and verify the selector prefix
-
-      await CSS.forcePseudoState({
-        nodeId: node.nodeId,
-        forcedPseudoClasses: [],
-      });
-
-      /*
-        Object.entries(pseudoCss).forEach(([key, value]) => {
-          Object.values(value).forEach((prop) => {
-            prop.important = true;
-          });
-        });
-        */
-
-      node.css = { ...node.css, ...pseudoCss };
-    } catch (error) {
-      console.error("cascade", error);
-    }
-  }
-
   // main
   console.log("cascading");
   const pb = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
@@ -438,7 +185,7 @@ async function crawl(pageURL) {
   await traverse(
     root,
     async (node) => {
-      await cascade(node);
+      await cascade(node, CSS);
       pb.increment();
     },
     true
@@ -450,7 +197,7 @@ async function crawl(pageURL) {
   await traverse(
     root,
     async (node) => {
-      await cascadePseudoClass(node);
+      await cascadePseudoClass(node, CSS);
       pb.increment();
     },
     false
