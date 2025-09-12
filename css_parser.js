@@ -165,3 +165,27 @@ export function replaceVariables(styleSheet) {
   //console.log(mergedRoot.toString());
   return mergedRoot.toString();
 }
+
+export function toInlineStyleJSON(styleSheet) {
+  const root = postcss.parse(styleSheet);
+  const result = {};
+
+  let ruleCount = 0;
+  root.walkRules((rule) => {
+    ruleCount++;
+    rule.walkDecls((decl) => {
+      result[decl.prop] = {
+        value: decl.value,
+        important: decl.important,
+      };
+    });
+  });
+
+  if (ruleCount !== 1) {
+    throw new Error(
+      "toInlineStyleJSON: Expected exactly one rule in the stylesheet"
+    );
+  }
+
+  return result;
+}

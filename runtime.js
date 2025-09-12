@@ -5,29 +5,43 @@ export function inlineStyle() {
   const elements = [...body.querySelectorAll("*")];
   elements.push(body);
   for (const el of elements) {
-    const data_css = el.getAttribute("data-css");
-    const styleEl = document.createElement("style");
-    styleEl.textContent = data_css;
-
-    if (el.children.length > 0) {
-      el.insertBefore(styleEl, el.children[0]);
-    } else {
-      el.parentNode.insertBefore(styleEl, el);
-    }
-
-    // cleanup attrs
-    [...el.attributes].forEach((attr) => {
-      if (
-        attr.name !== "id" &&
-        attr.name !== "class" &&
-        attr.name !== "style" &&
-        attr.name !== "href" &&
-        //attr.name !== "data-pseudo" &&
-        !attr.name.includes("src")
-      ) {
-        el.removeAttribute(attr.name);
+    const dataCSSJSON = el.getAttribute("data-css");
+    if (dataCSSJSON) {
+      const { type, data } = JSON.parse(dataCSSJSON);
+      if (type === "styleSheet") {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = data;
+        if (el.children.length > 0) {
+          el.insertBefore(styleEl, el.children[0]);
+        } else {
+          el.parentNode.insertBefore(styleEl, el);
+        }
+      } else {
+        // inlineStyle
+        //el.style.cssText = "";
+        Object.entries(data).forEach(([key, value]) => {
+          el.style.setProperty(
+            key,
+            value.value,
+            value.important ? "important" : ""
+          );
+        });
       }
-    });
+
+      // cleanup attrs
+      [...el.attributes].forEach((attr) => {
+        if (
+          attr.name !== "id" &&
+          attr.name !== "class" &&
+          attr.name !== "style" &&
+          attr.name !== "href" &&
+          //attr.name !== "data-pseudo" &&
+          !attr.name.includes("src")
+        ) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    }
   }
 }
 

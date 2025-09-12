@@ -9,6 +9,7 @@ import {
   isEffectivePseudoElem,
   toStyleSheet,
   replaceVariables,
+  toInlineStyleJSON,
 } from "./css_parser.js";
 
 import { getFilename, downloadFile, MIME, getExtension } from "./file.js";
@@ -486,6 +487,7 @@ async function crawl(pageURL) {
         value: id,
       });
     }
+    node.id = id;
 
     for (const [selector, rules] of Object.entries(node.css)) {
       node.css[`#${id}` + selector] = rules;
@@ -496,12 +498,24 @@ async function crawl(pageURL) {
     root,
     async (node) => {
       cleanUp(node);
-      await setId(node);
+      await setId(node); // add #id for css selector
       node.styleSheet = replaceVariables(toStyleSheet(node.css));
+      let cssType = "styleSheet";
+      if (
+        Object.keys(node.css).length === 1 && // no 0 case, must have one, even empty
+        Object.keys(node.css)[0] === `#${node.id}`
+      ) {
+        cssType = "inlineStyle";
+        node.inlineStyleJSON = toInlineStyleJSON(node.styleSheet);
+      }
       await DOM.setAttributeValue({
         nodeId: node.nodeId,
         name: "data-css",
-        value: node.styleSheet,
+        value: JSON.stringify({
+          type: cssType,
+          data:
+            cssType === "styleSheet" ? node.styleSheet : node.inlineStyleJSON,
+        }),
       });
     },
     true
