@@ -8,7 +8,7 @@ import {
 
 import * as CSSwhat from "css-what";
 
-export async function cascade(node, CSS) {
+export async function cascade(node, CSS, screenSize) {
   //BUG: sometimes svg or some div nodeId=0
   const css = { "": {} };
 
@@ -72,13 +72,13 @@ export async function cascade(node, CSS) {
         });
         */
 
-    node.css = css;
+    node.css[screenSize] = css;
   } catch (error) {
     console.error("cascade", error);
   }
 }
 
-export async function cascadePseudoClass(node, CSS) {
+export async function cascadePseudoClass(node, CSS, screenSize) {
   try {
     const pseudoCss = {};
     //BUG: sometimes svg or some div nodeId=0
@@ -165,7 +165,7 @@ export async function cascadePseudoClass(node, CSS) {
 				});
 				*/
 
-    node.css = { ...node.css, ...pseudoCss };
+    node.css[screenSize] = { ...node.css[screenSize], ...pseudoCss };
   } catch (error) {
     console.error("cascade", error);
   }

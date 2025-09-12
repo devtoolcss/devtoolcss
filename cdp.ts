@@ -1,11 +1,7 @@
 import fs from "fs";
 import CDP from "chrome-remote-interface";
 import { exec } from "child_process";
-import {
-  toStyleSheet,
-  replaceVariables,
-  toInlineStyleJSON,
-} from "./css_parser.js";
+import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
 
 import { getFilename, downloadFile, MIME, getExtension } from "./file.js";
 
@@ -52,14 +48,7 @@ async function crawl(pageURL) {
   const target = await CDP.New();
   const client = await CDP({ target: target.id });
 
-  await client.Emulation.setDeviceMetricsOverride({
-    width: 1280, // my browser's fullscreen innerWidth/Height
-    height: 720,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-
-  const { DOM, CSS, Page, Runtime, Network } = client;
+  const { DOM, CSS, Page, Runtime, Network, Emulation } = client;
 
   const requests = {};
   Network.on("responseReceived", (param) => {
@@ -152,6 +141,8 @@ async function crawl(pageURL) {
 
   async function countElementNodes(node) {
     totalElements += 1;
+    // init for multiple screen sizes
+    node.css = {};
   }
   await traverse(root, countElementNodes, true);
 
@@ -179,38 +170,83 @@ async function crawl(pageURL) {
   //console.log(total); // 932
 
   // main
-  console.log("cascading");
-  const pb = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-  pb.start(totalElements, 0);
-  await traverse(
-    root,
-    async (node) => {
-      await cascade(node, CSS);
-      pb.increment();
-    },
-    true
-  );
-  pb.stop();
+  const breakpoints = [1024];
+  const screens = [];
+  if (breakpoints.length === 0) {
+    screens.push({ width: 1280, height: 800, mobile: false });
+  } else {
+    for (let i = 0; i < breakpoints.length; ++i) {
+      let width;
+      if (i === 0) {
+        width = Math.round(breakpoints[i] / 2);
+      } else {
+        width = Math.round((breakpoints[i] + breakpoints[i + 1]) / 2);
+      }
+      screens.push({
+        width,
+        height: 800,
+        mobile: false,
+      });
+    }
+    screens.push({
+      width: breakpoints[breakpoints.length - 1] + 100,
+      height: 800,
+      mobile: false,
+    }); // add one more for larger than largest breakpoint
+  }
 
-  console.log("cascading pseudo");
-  pb.start(totalElements, 0);
-  await traverse(
-    root,
-    async (node) => {
-      await cascadePseudoClass(node, CSS);
-      pb.increment();
-    },
-    false
-  );
-  pb.stop();
+  const pb = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+  for (let i = 0; i < screens.length; i++) {
+    const { width, height, mobile } = screens[i];
+    console.log(
+      `Device ${i} (width: ${width}, height: ${height}, mobile: ${mobile})`
+    );
+    await client.Emulation.setDeviceMetricsOverride({
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile,
+    });
+    console.log(`cascading`);
+
+    pb.start(totalElements, 0);
+    await traverse(
+      root,
+      async (node) => {
+        await cascade(node, CSS, i);
+        pb.increment();
+      },
+      true
+    );
+    pb.stop();
+
+    console.log(`cascading pseudo`);
+    pb.start(totalElements, 0);
+    await traverse(
+      root,
+      async (node) => {
+        await cascadePseudoClass(node, CSS, i);
+        pb.increment();
+      },
+      false
+    );
+    pb.stop();
+  }
+
+  /*
+  console.log(JSON.stringify(root.css));
+  process.exit(0);
+  */
 
   function cleanUp(node) {
-    for (const [selector, rules] of Object.entries(node.css)) {
-      for (const [prop, value] of Object.entries(rules)) {
-        if (!value.explicit) {
-          delete rules[prop];
+    for (const rulesObj of Object.values(node.css)) {
+      for (const [selector, rules] of Object.entries(rulesObj)) {
+        for (const [prop, value] of Object.entries(rules)) {
+          if (!value.explicit) {
+            delete rules[prop];
+          }
+          delete value.explicit;
         }
-        delete value.explicit;
       }
     }
   }
@@ -236,9 +272,11 @@ async function crawl(pageURL) {
     }
     node.id = id;
 
-    for (const [selector, rules] of Object.entries(node.css)) {
-      node.css[`#${id}` + selector] = rules;
-      delete node.css[selector];
+    for (const rulesObj of Object.values(node.css)) {
+      for (const [selector, rules] of Object.entries(rulesObj)) {
+        rulesObj[`#${id}` + selector] = rules;
+        delete rulesObj[selector];
+      }
     }
   }
   await traverse(
@@ -246,26 +284,91 @@ async function crawl(pageURL) {
     async (node) => {
       cleanUp(node);
       await setId(node); // add #id for css selector
-      node.styleSheet = replaceVariables(toStyleSheet(node.css));
-      let cssType = "styleSheet";
-      if (
-        Object.keys(node.css).length === 1 && // no 0 case, must have one, even empty
-        Object.keys(node.css)[0] === `#${node.id}`
-      ) {
-        cssType = "inlineStyle";
-        node.inlineStyleJSON = toInlineStyleJSON(node.styleSheet);
-      }
-      await DOM.setAttributeValue({
-        nodeId: node.nodeId,
-        name: "data-css",
-        value: JSON.stringify({
-          type: cssType,
-          data:
-            cssType === "styleSheet" ? node.styleSheet : node.inlineStyleJSON,
-        }),
+      const styleJSONs = {};
+      Object.entries(node.css).map(([screenKey, rules]) => {
+        styleJSONs[screenKey] = toStyleJSON(
+          replaceVariables(toStyleSheet(rules))
+        );
       });
+
+      const sharedCSS = {};
+      const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
+
+      for (const [targetSelector, targetRule] of Object.entries(
+        firstStyleJSON
+      )) {
+        for (const [targetProp, targetValue] of Object.entries(targetRule)) {
+          // Check if all other styleJSONs have the same selector and property with the same value
+          const isShared = otherStyleJSONs.every((styleJSON) => {
+            return (
+              styleJSON[targetSelector] &&
+              JSON.stringify(styleJSON[targetSelector][targetProp]) ===
+                JSON.stringify(targetValue)
+            );
+          });
+          if (isShared) {
+            if (!sharedCSS[targetSelector]) sharedCSS[targetSelector] = {};
+            sharedCSS[targetSelector][targetProp] = targetValue;
+            Object.values(styleJSONs).forEach((styleJSON) => {
+              if (styleJSON[targetSelector]) {
+                delete styleJSON[targetSelector][targetProp];
+              }
+            });
+          }
+        }
+        // clean up empty selectors and screenKeys
+        for (const screenKey of Object.keys(styleJSONs)) {
+          const styleKeyJSON = styleJSONs[screenKey];
+          for (const selector of Object.keys(styleKeyJSON)) {
+            if (Object.keys(styleKeyJSON[selector]).length === 0) {
+              delete styleKeyJSON[selector];
+            }
+          }
+          if (Object.keys(styleJSONs[screenKey]).length === 0) {
+            delete styleJSONs[screenKey];
+          }
+        }
+
+        let cssType = "styleSheet";
+        let cssData;
+        if (
+          Object.keys(styleJSONs).length === 0 &&
+          Object.keys(sharedCSS).length === 1 &&
+          Object.keys(sharedCSS)[0] === `#${node.id}`
+        ) {
+          cssType = "inlineStyle";
+          cssData = sharedCSS[`#${node.id}`];
+        } else {
+          cssData = "";
+          if (Object.keys(sharedCSS).length > 0) {
+            cssData += toStyleSheet(sharedCSS);
+          }
+          for (const key of Object.keys(styleJSONs)) {
+            const i = parseInt(key);
+            if (i === 0) {
+              cssData += toStyleSheet(styleJSONs[i], null, breakpoints[i]);
+            } else if (i === screens.length - 1) {
+              cssData += toStyleSheet(styleJSONs[i], breakpoints[i - 1], null);
+            } else {
+              cssData += toStyleSheet(
+                styleJSONs[i],
+                breakpoints[i - 1],
+                breakpoints[i]
+              );
+            }
+          }
+        }
+        await DOM.setAttributeValue({
+          nodeId: node.nodeId,
+          name: "data-css",
+          value: JSON.stringify({
+            type: cssType,
+            data: cssData,
+          }),
+        });
+      }
     },
-    true
+    false //true
   );
 
   //console.log("body");

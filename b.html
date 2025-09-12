@@ -1,0 +1,33 @@
+<style>
+  a {
+    display: block;
+    color: var(--GG);
+  }
+
+  a:hover:not(.foo),
+  a:hover {
+    text-decoration: none;
+    outline: none;
+  }
+
+  body {
+    background-color: white;
+    --GG: black;
+  }
+
+  @media (width >= 6400px) {
+    body {
+      background-color: green;
+      --GG: blue;
+    }
+  }
+
+  body:hover {
+    background-color: yellow;
+    --GG: red;
+  }
+</style>
+
+<body id="bd" style="color: blue !important">
+  <a href="#">Link</a>
+</body>

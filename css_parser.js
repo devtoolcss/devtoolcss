@@ -111,7 +111,7 @@ export function parseCSSProperties(cssProperties, css, variableOnly = false) {
     }
   }
 }
-export function toStyleSheet(css) {
+export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
   var stylesheet = "";
   for (const [selector, rules] of Object.entries(css)) {
     const decls = Object.entries(rules)
@@ -121,6 +121,21 @@ export function toStyleSheet(css) {
       )
       .join("\n");
     stylesheet += `${selector} {\n${decls}\n}\n`;
+  }
+  if (mediaMinWidth || mediaMaxWidth) {
+    // Indent each line of the stylesheet
+    const indented = stylesheet
+      .split("\n")
+      .map((line) => (line ? "  " + line : line))
+      .join("\n");
+    if (mediaMinWidth && mediaMaxWidth) {
+      stylesheet = `@media (width >= ${mediaMinWidth}px) and (width < ${mediaMaxWidth}px) {\n${indented}}\n`;
+    } else if (mediaMinWidth) {
+      stylesheet = `@media (width >= ${mediaMinWidth}px) {\n${indented}}\n`;
+    } else {
+      // mediaMaxWidth
+      stylesheet = `@media (width < ${mediaMaxWidth}px) {\n${indented}}\n`;
+    }
   }
   return stylesheet;
 }
@@ -166,26 +181,20 @@ export function replaceVariables(styleSheet) {
   return mergedRoot.toString();
 }
 
-export function toInlineStyleJSON(styleSheet) {
+export function toStyleJSON(styleSheet) {
   const root = postcss.parse(styleSheet);
   const result = {};
 
-  let ruleCount = 0;
   root.walkRules((rule) => {
-    ruleCount++;
+    const selector = rule.selector;
+    if (!result[selector]) result[selector] = {};
     rule.walkDecls((decl) => {
-      result[decl.prop] = {
+      result[selector][decl.prop] = {
         value: decl.value,
         important: decl.important,
       };
     });
   });
-
-  if (ruleCount !== 1) {
-    throw new Error(
-      "toInlineStyleJSON: Expected exactly one rule in the stylesheet"
-    );
-  }
 
   return result;
 }
