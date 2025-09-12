@@ -31,12 +31,17 @@ export function inlineStyle() {
       // cleanup attrs
       [...el.attributes].forEach((attr) => {
         if (
+          /*
           attr.name !== "id" &&
           attr.name !== "class" &&
           attr.name !== "style" &&
           attr.name !== "href" &&
+          attr.name !== "value" &&
+          attr.name !== "type" &&
           //attr.name !== "data-pseudo" &&
           !attr.name.includes("src")
+          */
+          attr.name === "data-css"
         ) {
           el.removeAttribute(attr.name);
         }
