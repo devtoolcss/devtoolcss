@@ -640,23 +640,27 @@ async function crawl(pageURL) {
   return filterPageUrls(origin, links);
 }
 
+const BROWSER = "../chrome/linux-141.0.7378.3/chrome-linux64/chrome";
+//const BROWSER = "brave-browser";
+//--headless
+const browserProc = exec(`${BROWSER} --headless --remote-debugging-port=9222`);
+
+// --user-data-dir=/tmp/chrome-devtools
+
+function cleanup() {
+  if (browserProc) browserProc.kill();
+}
+
 (async function () {
   try {
-    const BROWSER = "../chrome/linux-141.0.7378.3/chrome-linux64/chrome";
-    //const BROWSER = "brave-browser";
-    //--headless
-    const browserProc = exec(
-      `${BROWSER} --headless --remote-debugging-port=9222`
-    );
-
-    // --user-data-dir=/tmp/chrome-devtools
-
-    function cleanup() {
-      if (browserProc) browserProc.kill();
-    }
-
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
+    process.on("SIGINT", () => {
+      cleanup();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      cleanup();
+      process.exit(0);
+    });
     process.on("exit", cleanup);
 
     const rootURLObj = new URL("http://localhost:8080");
