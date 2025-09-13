@@ -1,7 +1,7 @@
 import escapeHTML from "escape-html";
 import escapeStringRegexp from "escape-string-regexp";
 
-export function rewriteLinks(urls, outerHTML) {
+export function rewriteResourceLinks(urls, outerHTML) {
   for (const { url, path } of urls) {
     const pathEscaped = escapeHTML(path);
     //if (url.startsWith("http")) { // url must start with http

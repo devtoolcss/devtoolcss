@@ -107,3 +107,19 @@ export function getAnchorHref() {
   });
   return [...links];
 }
+
+export function sameSiteHrefToRelativePath(origin) {
+  document.querySelectorAll("a").forEach((el) => {
+    if (el.href) {
+      try {
+        const url = new URL(el.href, document.baseURI);
+        if (url.origin === origin) {
+          const newHref = url.pathname + url.search + url.hash;
+          el.setAttribute("href", newHref || "#");
+        }
+      } catch (e) {
+        // Ignore invalid URLs
+      }
+    }
+  });
+}

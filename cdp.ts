@@ -5,9 +5,15 @@ import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
 
 import { getFilename, downloadFile, MIME, getExtension } from "./file.js";
 
-import { rewriteLinks } from "./rewrite.js";
+import { rewriteResourceLinks } from "./rewrite.js";
 
-import { inlineStyle, cleanTags, getFonts, getAnchorHref } from "./runtime.js";
+import {
+  inlineStyle,
+  cleanTags,
+  getFonts,
+  getAnchorHref,
+  sameSiteHrefToRelativePath,
+} from "./runtime.js";
 
 import { cascade, cascadePseudoClass } from "./cascade.js";
 
@@ -389,7 +395,7 @@ async function crawl(pageURL) {
     const filename = getFilename(url);
     if (type && filename) {
       const outPath = path.join(assetDir, type, filename);
-      const urlPath = path.join("./assets", type, filename);
+      const urlPath = path.join("/assets", type, filename);
       //console.log("saving", url, "to", outPath);
       if (type === "audio" || type === "video") {
         await downloadFile(url, outPath);
@@ -419,7 +425,7 @@ async function crawl(pageURL) {
   resultFonts.value.forEach((cssText) => {
     fontCSSSet.add(cssText);
   });
-  const fontLinkTag = '<link rel="stylesheet" href="./fonts.css" />\n';
+  const fontLinkTag = '<link rel="stylesheet" href="/fonts.css" />\n';
 
   console.log("Inlining style...");
   await Runtime.evaluate({
@@ -430,11 +436,18 @@ async function crawl(pageURL) {
       "; inlineStyle();",
   });
 
+  console.log("Rewriting Links...");
+  const origin = getOrigin(pageURL);
+  await Runtime.evaluate({
+    expression:
+      sameSiteHrefToRelativePath.toString() +
+      `; sameSiteHrefToRelativePath(${JSON.stringify(origin)});`,
+  });
+
   // Get the updated HTML with inline styles
   var { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
 
-  console.log("Rewriting Links...");
-  outerHTML = rewriteLinks(urls, outerHTML);
+  outerHTML = rewriteResourceLinks(urls, outerHTML);
   outerHTML = fontLinkTag + outerHTML;
 
   // Save to file
@@ -458,9 +471,6 @@ async function crawl(pageURL) {
     returnByValue: true,
   });
   const links = resultLinks.value;
-
-  await client.close();
-  const origin = getOrigin(pageURL);
 
   function filterPageUrls(origin, links) {
     const results = [];
@@ -487,6 +497,8 @@ async function crawl(pageURL) {
     return results;
   }
 
+  await client.close();
+
   return filterPageUrls(origin, links);
 }
 
@@ -512,7 +524,7 @@ try {
   });
   process.on("exit", cleanup);
 
-  const rootURLObj = new URL("http://localhost:8080");
+  const rootURLObj = new URL("https://bmaa.tw");
   const rootURL = rootURLObj.origin + rootURLObj.pathname;
   let pageQueue = [rootURL];
   const seenURLs = new Set();
