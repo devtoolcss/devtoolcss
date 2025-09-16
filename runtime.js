@@ -55,7 +55,7 @@ export function cleanTags() {
   toClean.forEach((el) => el.remove());
 }
 
-export function getFonts(fontFiles) {
+export function getFontRules(fontFiles) {
   const fontCSSs = [];
 
   for (const sheet of document.styleSheets) {

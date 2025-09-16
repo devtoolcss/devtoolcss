@@ -10,7 +10,7 @@ import { rewriteResourceLinks } from "./rewrite.js";
 import {
   inlineStyle,
   cleanTags,
-  getFonts,
+  getFontRules,
   getAnchorHref,
   sameSiteHrefToRelativePath,
 } from "./runtime.js";
@@ -207,7 +207,7 @@ async function crawl(pageURL) {
     console.log(
       `Device ${i} (width: ${width}, height: ${height}, mobile: ${mobile})`
     );
-    await client.Emulation.setDeviceMetricsOverride({
+    await Emulation.setDeviceMetricsOverride({
       width,
       height,
       deviceScaleFactor: 1,
@@ -419,7 +419,7 @@ async function crawl(pageURL) {
   console.log("Extracting fonts...");
   const { result: resultFonts } = await Runtime.evaluate({
     expression:
-      getFonts.toString() + `; getFonts(${JSON.stringify(fontFiles)});`,
+      getFontRules.toString() + `; getFontRules(${JSON.stringify(fontFiles)});`,
     returnByValue: true,
   });
   resultFonts.value.forEach((cssText) => {
