@@ -27,9 +27,16 @@ export function getFilename(url) {
   return decodeURIComponent(lastSegment.replace(/([#?]|%3F).*$/, ""));
 }
 
+function windowsFilename(name) {
+  return name.replace(/[<>:"/\\|?*]/g, "_");
+}
+
 export function getAvailableFilename(dir, filename) {
-  const { name, ext } = path.parse(filename);
-  let candidate = filename;
+  // Replace Windows-invalid filename characters with _
+  const sanitized =
+    process.platform === "win32" ? windowsFilename(filename) : filename;
+  const { name, ext } = path.parse(sanitized);
+  let candidate = sanitized;
   let counter = 1;
   while (fs.existsSync(`${dir}/${candidate}`)) {
     candidate = `${name}(${counter})${ext}`;
