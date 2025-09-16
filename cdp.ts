@@ -27,7 +27,6 @@ import { getPath, getOrigin } from "./url.js";
 
 import cliProgress from "cli-progress";
 import path from "path";
-import { getActiveResourcesInfo } from "process";
 
 const ELEMENT_NODE = 1;
 
