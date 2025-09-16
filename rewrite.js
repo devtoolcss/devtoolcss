@@ -2,9 +2,9 @@ import escapeHTML from "escape-html";
 import escapeStringRegexp from "escape-string-regexp";
 import path from "path";
 
-export function rewriteResourceLinks(base, urls, outerHTML) {
+export function rewriteResourceLinks(base, resources, outerHTML) {
   // base decoded, no trailing '/'
-  for (const { url, path: filePath } of urls) {
+  for (const { url, path: filePath } of resources) {
     const pathEscaped = escapeHTML(filePath);
     //if (url.startsWith("http")) { // url must start with http
     const urlObj = new URL(url);

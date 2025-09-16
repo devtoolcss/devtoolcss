@@ -2,6 +2,7 @@ import fs from "fs";
 import https from "https";
 import http from "http";
 import { URL } from "url";
+import path from "path";
 
 export const MIME = [
   "application",
@@ -14,14 +15,27 @@ export const MIME = [
   "video",
 ];
 
+// handle wordpress %3F ending of filename
 export function getExtension(url) {
   const match = url.match(/\.([a-z0-9]+)(?:\?|%3F|#|$)/i);
   return match ? "." + match[1].toLowerCase() : ".bin";
 }
 
+// handle wordpress %3F ending of filename
 export function getFilename(url) {
   const lastSegment = url.substring(url.lastIndexOf("/") + 1);
   return decodeURIComponent(lastSegment.replace(/([#?]|%3F).*$/, ""));
+}
+
+export function getAvailableFilename(dir, filename) {
+  const { name, ext } = path.parse(filename);
+  let candidate = filename;
+  let counter = 1;
+  while (fs.existsSync(`${dir}/${candidate}`)) {
+    candidate = `${name}(${counter})${ext}`;
+    counter++;
+  }
+  return candidate;
 }
 
 export async function downloadFile(url, dest) {

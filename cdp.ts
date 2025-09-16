@@ -3,7 +3,13 @@ import CDP from "chrome-remote-interface";
 import { exec } from "child_process";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
 
-import { getFilename, downloadFile, MIME, getExtension } from "./file.js";
+import {
+  getAvailableFilename,
+  getFilename,
+  downloadFile,
+  MIME,
+  getExtension,
+} from "./file.js";
 
 import { rewriteResourceLinks } from "./rewrite.js";
 
@@ -21,6 +27,7 @@ import { getPath, getOrigin } from "./url.js";
 
 import cliProgress from "cli-progress";
 import path from "path";
+import { getActiveResourcesInfo } from "process";
 
 const ELEMENT_NODE = 1;
 
@@ -49,6 +56,7 @@ async function traverse(node, callback, parallel = false) {
   }
 }
 
+const downloadedURLs = new Set();
 async function crawl(pageURL) {
   // seems that each client is a tab, a tab is a ws connection
   const target = await CDP.New();
@@ -62,6 +70,8 @@ async function crawl(pageURL) {
     if (url.startsWith("data:")) return;
     const filename = getFilename(url);
     const [type, subtype] = param.response.mimeType.split("/");
+
+    // filter out unneeded resources
     if (["html", "javascript", "css"].includes(subtype)) return;
     try {
       if (
@@ -72,21 +82,6 @@ async function crawl(pageURL) {
     } catch {}
 
     requests[param.requestId] = { url, filename, type };
-  });
-  Network.on("loadingFinished", async (param) => {
-    const requestId = param.requestId;
-    if (
-      !requests[requestId] ||
-      ["audio", "video"].includes(requests[requestId].type)
-    ) {
-      return;
-    }
-
-    const { body, base64Encoded } = await Network.getResponseBody({
-      requestId: requestId,
-    });
-    requests[requestId].base64Encoded = base64Encoded;
-    requests[requestId].data = body;
   });
 
   await Network.setCacheDisabled({ cacheDisabled: true });
@@ -387,29 +382,45 @@ async function crawl(pageURL) {
 
   console.log("Downloading files...");
 
-  const urls = new Set();
   const fontFiles = [];
+  const resources = [];
   pb.start(Object.keys(requests).length, 0);
-  for (const req of Object.values(requests)) {
-    const { type, url, data, base64Encoded } = req;
-    const filename = getFilename(url);
+  for (const [requestId, req] of Object.entries(requests)) {
+    const { type, url, filename } = req;
     if (type && filename) {
-      const outPath = path.join(assetDir, type, filename);
-      const urlPath = path.join("/assets", type, filename);
+      const outDir = path.join(assetDir, type);
+      const outFilename = getAvailableFilename(outDir, filename);
+      const outPath = path.join(outDir, outFilename);
+      const urlPath = path.join("/assets", type, outFilename);
       //console.log("saving", url, "to", outPath);
-      if (type === "audio" || type === "video") {
-        await downloadFile(url, outPath);
-        urls.add({ url, path: urlPath });
-      } else if (data) {
-        if (type === "font") {
-          fontFiles.push(filename);
+
+      // not checking loaded so can error, just try
+      if (!downloadedURLs.has(url)) {
+        try {
+          if (type === "audio" || type === "video") {
+            await downloadFile(url, outPath);
+            resources.push({ url, path: urlPath });
+          } else {
+            if (type === "font") {
+              fontFiles.push(filename);
+            }
+
+            const { body, base64Encoded } = await Network.getResponseBody({
+              requestId: requestId,
+            });
+            const buffer = base64Encoded
+              ? Buffer.from(body, "base64")
+              : Buffer.from(body);
+            fs.writeFileSync(outPath, buffer);
+            resources.push({ url, path: urlPath });
+          }
+          downloadedURLs.add(url);
+        } catch (e) {
+          console.warn("download error:", e);
         }
-        const filePath = outPath;
-        const buffer = base64Encoded
-          ? Buffer.from(data, "base64")
-          : Buffer.from(data);
-        fs.writeFileSync(filePath, buffer);
-        urls.add({ url, path: urlPath });
+      } else {
+        // have downloaded and now used
+        resources.push({ url, path: urlPath });
       }
     }
     pb.increment();
@@ -459,7 +470,7 @@ async function crawl(pageURL) {
   // Get the updated HTML with inline styles
   var { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
 
-  outerHTML = rewriteResourceLinks(pageBase, urls, outerHTML);
+  outerHTML = rewriteResourceLinks(pageBase, resources, outerHTML);
   outerHTML = fontLinkTag + outerHTML;
 
   // Save to file
