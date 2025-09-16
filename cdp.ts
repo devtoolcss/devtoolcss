@@ -34,6 +34,7 @@ let baseDir = "./out";
 let assetDir = "./out/assets";
 
 const fontCSSSet = new Set();
+const downloadedURLs = new Set();
 
 async function traverse(node, callback, parallel = false) {
   if (node.nodeType !== ELEMENT_NODE) return;
@@ -55,7 +56,6 @@ async function traverse(node, callback, parallel = false) {
   }
 }
 
-const downloadedURLs = new Set();
 async function crawl(pageURL) {
   // seems that each client is a tab, a tab is a ws connection
   const target = await CDP.New();
