@@ -176,7 +176,7 @@ async function crawl(pageURL) {
   //console.log(total); // 932
 
   // main
-  const breakpoints = [1024];
+  const breakpoints = []; // 1024
   const screens = [];
   if (breakpoints.length === 0) {
     screens.push({ width: 1280, height: 800, mobile: false });
@@ -437,6 +437,18 @@ async function crawl(pageURL) {
   });
 
   console.log("Rewriting Links...");
+  const pagePath = decodeURIComponent(getPath(pageURL));
+  let htmlDir, pageBase, htmlPath;
+  if (pagePath.endsWith(".html")) {
+    // can't tell dir or file by trailing slash
+    htmlDir = path.join(baseDir, path.dirname(pagePath));
+    htmlPath = path.join(htmlDir, path.basename(pagePath));
+    pageBase = path.dirname(pagePath);
+  } else {
+    htmlDir = path.join(baseDir, pagePath);
+    htmlPath = path.join(htmlDir, "index.html");
+    pageBase = path.dirname(path.join(pagePath, "a"));
+  }
   const origin = getOrigin(pageURL);
   await Runtime.evaluate({
     expression:
@@ -447,21 +459,11 @@ async function crawl(pageURL) {
   // Get the updated HTML with inline styles
   var { outerHTML } = await DOM.getOuterHTML({ nodeId: root.nodeId });
 
-  outerHTML = rewriteResourceLinks(urls, outerHTML);
+  outerHTML = rewriteResourceLinks(pageBase, urls, outerHTML);
   outerHTML = fontLinkTag + outerHTML;
 
   // Save to file
   // all filepath based on URL must be decoded
-  const pagePath = decodeURIComponent(getPath(pageURL));
-  let htmlDir;
-  let htmlPath;
-  if (pagePath.endsWith(".html")) {
-    htmlDir = path.join(baseDir, path.dirname(pagePath));
-    htmlPath = path.join(htmlDir, path.basename(pagePath));
-  } else {
-    htmlDir = path.join(baseDir, pagePath);
-    htmlPath = path.join(htmlDir, "index.html");
-  }
   fs.mkdirSync(htmlDir, { recursive: true });
   fs.writeFileSync(htmlPath, outerHTML, "utf-8");
   console.log(`✅ ${htmlPath} saved!`);
@@ -525,6 +527,10 @@ try {
   process.on("exit", cleanup);
 
   const rootURLObj = new URL("https://bmaa.tw");
+  //const rootURLObj = new URL("https://react.dev/");
+  //const rootURLObj = new URL("https://wmail1.cc.ntu.edu.tw/rc/");
+  //const rootURLObj = new URL("https://scholar.google.com/");
+  //const rootURLObj = new URL("http://localhost:8080");
   const rootURL = rootURLObj.origin + rootURLObj.pathname;
   let pageQueue = [rootURL];
   const seenURLs = new Set();
