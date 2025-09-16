@@ -328,45 +328,49 @@ async function crawl(pageURL) {
             delete styleJSONs[screenKey];
           }
         }
-
-        let cssType = "styleSheet";
-        let cssData;
-        if (
-          Object.keys(styleJSONs).length === 0 &&
-          Object.keys(sharedCSS).length === 1 &&
-          Object.keys(sharedCSS)[0] === `#${node.id}`
-        ) {
-          cssType = "inlineStyle";
-          cssData = sharedCSS[`#${node.id}`];
-        } else {
-          cssData = "";
-          if (Object.keys(sharedCSS).length > 0) {
-            cssData += toStyleSheet(sharedCSS);
-          }
-          for (const key of Object.keys(styleJSONs)) {
-            const i = parseInt(key);
-            if (i === 0) {
-              cssData += toStyleSheet(styleJSONs[i], null, breakpoints[i]);
-            } else if (i === screens.length - 1) {
-              cssData += toStyleSheet(styleJSONs[i], breakpoints[i - 1], null);
-            } else {
-              cssData += toStyleSheet(
-                styleJSONs[i],
-                breakpoints[i - 1],
-                breakpoints[i]
-              );
-            }
+      }
+      let cssType = "styleSheet";
+      let cssData;
+      if (
+        Object.keys(styleJSONs).length === 0 &&
+        Object.keys(sharedCSS).length === 0
+      ) {
+        return;
+      } else if (
+        Object.keys(styleJSONs).length === 0 &&
+        Object.keys(sharedCSS).length === 1 &&
+        Object.keys(sharedCSS)[0] === `#${node.id}`
+      ) {
+        cssType = "inlineStyle";
+        cssData = sharedCSS[`#${node.id}`];
+      } else {
+        cssData = "";
+        if (Object.keys(sharedCSS).length > 0) {
+          cssData += toStyleSheet(sharedCSS);
+        }
+        for (const key of Object.keys(styleJSONs)) {
+          const i = parseInt(key);
+          if (i === 0) {
+            cssData += toStyleSheet(styleJSONs[i], null, breakpoints[i]);
+          } else if (i === screens.length - 1) {
+            cssData += toStyleSheet(styleJSONs[i], breakpoints[i - 1], null);
+          } else {
+            cssData += toStyleSheet(
+              styleJSONs[i],
+              breakpoints[i - 1],
+              breakpoints[i]
+            );
           }
         }
-        await DOM.setAttributeValue({
-          nodeId: node.nodeId,
-          name: "data-css",
-          value: JSON.stringify({
-            type: cssType,
-            data: cssData,
-          }),
-        });
       }
+      await DOM.setAttributeValue({
+        nodeId: node.nodeId,
+        name: "data-css",
+        value: JSON.stringify({
+          type: cssType,
+          data: cssData,
+        }),
+      });
     },
     false //true
   );
@@ -536,7 +540,11 @@ try {
   });
   process.on("exit", cleanup);
 
-  const rootURLObj = new URL("https://bmaa.tw");
+  const rootURLObj = new URL(
+    "https://www.cs.cornell.edu/courses/cs6120/2020fa/self-guided/"
+  );
+  //const rootURLObj = new URL("https://chatgpt.com/");
+  //const rootURLObj = new URL("https://bmaa.tw");
   //const rootURLObj = new URL("https://react.dev/");
   //const rootURLObj = new URL("https://wmail1.cc.ntu.edu.tw/rc/");
   //const rootURLObj = new URL("https://scholar.google.com/");
