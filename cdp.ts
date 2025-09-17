@@ -2,24 +2,8 @@ import fs from "fs";
 import CDP from "chrome-remote-interface";
 import { exec } from "child_process";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
-import type { Protocol } from "devtools-protocol";
 
-// Add a CSS entry type for clarity
-type CSSRules = {
-  [selector: string]: {
-    [property: string]: {
-      value: string;
-      important?: boolean;
-      explicit?: boolean;
-    };
-  };
-};
-
-type Node = Omit<Protocol.DOM.Node, "children"> & {
-  id?: string;
-  children?: Node[];
-  css?: { [key: string]: CSSRules };
-};
+import { Node } from "./types.js";
 
 import {
   getAvailableFilename,
@@ -46,7 +30,6 @@ import { getPath, getOrigin } from "./url.js";
 import cliProgress from "cli-progress";
 import path from "path";
 
-/*
 enum CDPNodeType {
   ELEMENT_NODE = 1,
   //ATTRIBUTE_NODE = 2,
@@ -61,14 +44,6 @@ enum CDPNodeType {
   //DOCUMENT_FRAGMENT_NODE = 11,
   //NOTATION_NODE = 12,
 }
-*/
-const CDPNodeType = {
-  ELEMENT_NODE: 1,
-  TEXT_NODE: 3,
-  COMMENT_NODE: 8,
-  DOCUMENT_NODE: 9,
-  DOCUMENT_TYPE_NODE: 10,
-} as const;
 
 let baseDir = "./out";
 let assetDir = "./out/assets";
@@ -76,14 +51,14 @@ let assetDir = "./out/assets";
 const fontCSSSet = new Set();
 const downloadedURLs = new Set();
 
-async function traverse(node, callback, parallel = false) {
+async function traverse(node: Node, callback, parallel = false) {
   if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return;
   await callback(node);
   if (node.children) {
     if (parallel) {
       try {
         await Promise.all(
-          node.children.map((child) => traverse(child, callback, parallel))
+          node.children.map((child) => traverse(child, callback, parallel)),
         );
       } catch (error) {
         console.log(error);
@@ -241,7 +216,7 @@ async function crawl(pageURL) {
   for (let i = 0; i < screens.length; i++) {
     const { width, height, mobile } = screens[i];
     console.log(
-      `Device ${i} (width: ${width}, height: ${height}, mobile: ${mobile})`
+      `Device ${i} (width: ${width}, height: ${height}, mobile: ${mobile})`,
     );
     await Emulation.setDeviceMetricsOverride({
       width,
@@ -258,7 +233,7 @@ async function crawl(pageURL) {
         await cascade(node, CSS, i);
         pb.increment();
       },
-      true
+      true,
     );
     pb.stop();
 
@@ -270,7 +245,7 @@ async function crawl(pageURL) {
         await cascadePseudoClass(node, CSS, i);
         pb.increment();
       },
-      false
+      false,
     );
     pb.stop();
   }
@@ -329,7 +304,7 @@ async function crawl(pageURL) {
       const styleJSONs = {};
       Object.entries(node.css).map(([screenKey, rules]) => {
         styleJSONs[screenKey] = toStyleJSON(
-          replaceVariables(toStyleSheet(rules))
+          replaceVariables(toStyleSheet(rules)),
         );
       });
 
@@ -337,7 +312,7 @@ async function crawl(pageURL) {
       const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
 
       for (const [targetSelector, targetRule] of Object.entries(
-        firstStyleJSON
+        firstStyleJSON,
       )) {
         for (const [targetProp, targetValue] of Object.entries(targetRule)) {
           // Check if all other styleJSONs have the same selector and property with the same value
@@ -400,7 +375,7 @@ async function crawl(pageURL) {
             cssData += toStyleSheet(
               styleJSONs[i],
               breakpoints[i - 1],
-              breakpoints[i]
+              breakpoints[i],
             );
           }
         }
@@ -414,7 +389,7 @@ async function crawl(pageURL) {
         }),
       });
     },
-    false //true
+    false, //true
   );
 
   //console.log("body");
