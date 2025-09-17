@@ -2,6 +2,24 @@ import fs from "fs";
 import CDP from "chrome-remote-interface";
 import { exec } from "child_process";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
+import type { Protocol } from "devtools-protocol";
+
+// Add a CSS entry type for clarity
+type CSSRules = {
+  [selector: string]: {
+    [property: string]: {
+      value: string;
+      important?: boolean;
+      explicit?: boolean;
+    };
+  };
+};
+
+type Node = Omit<Protocol.DOM.Node, "children"> & {
+  id?: string;
+  children?: Node[];
+  css?: { [key: string]: CSSRules };
+};
 
 import {
   getAvailableFilename,
@@ -28,7 +46,29 @@ import { getPath, getOrigin } from "./url.js";
 import cliProgress from "cli-progress";
 import path from "path";
 
-const ELEMENT_NODE = 1;
+/*
+enum CDPNodeType {
+  ELEMENT_NODE = 1,
+  //ATTRIBUTE_NODE = 2,
+  TEXT_NODE = 3,
+  //CDATA_SECTION_NODE = 4,
+  //ENTITY_REFERENCE_NODE = 5,
+  //ENTITY_NODE = 6,
+  //PROCESSING_INSTRUCTION_NODE = 7,
+  COMMENT_NODE = 8,
+  DOCUMENT_NODE = 9,
+  DOCUMENT_TYPE_NODE = 10,
+  //DOCUMENT_FRAGMENT_NODE = 11,
+  //NOTATION_NODE = 12,
+}
+*/
+const CDPNodeType = {
+  ELEMENT_NODE: 1,
+  TEXT_NODE: 3,
+  COMMENT_NODE: 8,
+  DOCUMENT_NODE: 9,
+  DOCUMENT_TYPE_NODE: 10,
+} as const;
 
 let baseDir = "./out";
 let assetDir = "./out/assets";
@@ -37,7 +77,7 @@ const fontCSSSet = new Set();
 const downloadedURLs = new Set();
 
 async function traverse(node, callback, parallel = false) {
-  if (node.nodeType !== ELEMENT_NODE) return;
+  if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return;
   await callback(node);
   if (node.children) {
     if (parallel) {
@@ -63,7 +103,9 @@ async function crawl(pageURL) {
 
   const { DOM, CSS, Page, Runtime, Network, Emulation } = client;
 
-  const requests = {};
+  const requests: {
+    [requestId: string]: { url: string; filename: string; type: string };
+  } = {};
   Network.on("responseReceived", (param) => {
     const url = param.response.url;
     if (url.startsWith("data:")) return;
@@ -238,7 +280,7 @@ async function crawl(pageURL) {
   process.exit(0);
   */
 
-  function cleanUp(node) {
+  function cleanUp(node: Node) {
     for (const rulesObj of Object.values(node.css)) {
       for (const [selector, rules] of Object.entries(rulesObj)) {
         for (const [prop, value] of Object.entries(rules)) {
@@ -251,7 +293,7 @@ async function crawl(pageURL) {
     }
   }
 
-  async function setId(node) {
+  async function setId(node: Node) {
     var id = `node-${node.nodeId}`;
     var hasId = false;
     const { attributes } = await DOM.getAttributes({ nodeId: node.nodeId });
@@ -281,7 +323,7 @@ async function crawl(pageURL) {
   }
   await traverse(
     root,
-    async (node) => {
+    async (node: Node) => {
       cleanUp(node);
       await setId(node); // add #id for css selector
       const styleJSONs = {};
@@ -540,15 +582,16 @@ try {
   });
   process.on("exit", cleanup);
 
-  const rootURLObj = new URL(
-    "https://www.cs.cornell.edu/courses/cs6120/2020fa/self-guided/"
-  );
+  //const rootURLObj = new URL(
+  //  "https://www.cs.cornell.edu/courses/cs6120/2020fa/self-guided/"
+  //);
   //const rootURLObj = new URL("https://chatgpt.com/");
   //const rootURLObj = new URL("https://bmaa.tw");
   //const rootURLObj = new URL("https://react.dev/");
   //const rootURLObj = new URL("https://wmail1.cc.ntu.edu.tw/rc/");
   //const rootURLObj = new URL("https://scholar.google.com/");
-  //const rootURLObj = new URL("http://localhost:8080");
+  //const rootURLObj = new URL("https://www.comfy.org/");
+  const rootURLObj = new URL("http://localhost:8080/d.html");
   const rootURL = rootURLObj.origin + rootURLObj.pathname;
   let pageQueue = [rootURL];
   const seenURLs = new Set();
