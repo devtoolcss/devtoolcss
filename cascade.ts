@@ -28,7 +28,7 @@ export async function cascade(node, CSS, screenSize) {
           parseCSSProperties(
             inheritedStyle.inlineStyle.cssProperties,
             css[""],
-            true
+            true,
           );
         }
         if (inheritedStyle.matchedCSSRules) {
@@ -58,7 +58,7 @@ export async function cascade(node, CSS, screenSize) {
           const key = "::" + match.pseudoType;
           parseCSSProperties(
             rule.rule.style.cssProperties,
-            (css[key] = css[key] || {})
+            (css[key] = css[key] || {}),
           );
         }
       }
@@ -116,7 +116,7 @@ export async function cascadePseudoClass(node, CSS, screenSize) {
 				*/
 
     var { matchedCSSRules, pseudoElements } = await CSS.getMatchedStylesForNode(
-      { nodeId: node.nodeId }
+      { nodeId: node.nodeId },
     );
 
     // TODO: pseudoVars for overridden
@@ -126,7 +126,7 @@ export async function cascadePseudoClass(node, CSS, screenSize) {
       for (const rule of rules) {
         if (rule.rule.origin !== "regular") continue;
         const matchingSelectors = rule.matchingSelectors.map(
-          (i) => rule.rule.selectorList.selectors[i].text
+          (i) => rule.rule.selectorList.selectors[i].text,
         );
         for (const selector of matchingSelectors) {
           const parsedSelector = CSSwhat.parse(selector)[0];
@@ -135,7 +135,7 @@ export async function cascadePseudoClass(node, CSS, screenSize) {
             if (!suffix) continue;
             parseCSSProperties(
               rule.rule.style.cssProperties,
-              (pseudoCss[suffix] = pseudoCss[suffix] || {})
+              (pseudoCss[suffix] = pseudoCss[suffix] || {}),
             );
           }
         }

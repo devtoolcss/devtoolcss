@@ -56,7 +56,7 @@ export async function downloadFile(url, dest) {
           file.close();
           fs.unlink(dest, () => {});
           return reject(
-            new Error(`Failed to get '${url}' (${response.statusCode})`)
+            new Error(`Failed to get '${url}' (${response.statusCode})`),
           );
         }
         response.pipe(file);

@@ -22,18 +22,18 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
         .replace(
           new RegExp(
             `(?<![\\w\\/])${escapeStringRegexp(
-              escapeHTML(target)
+              escapeHTML(target),
             )}(?![\\w\\/])`,
-            "g"
+            "g",
           ),
-          pathEscaped
+          pathEscaped,
         )
         .replace(
           new RegExp(
             `(?<![\\w\\/])${escapeStringRegexp(target)}(?![\\w\\/])`,
-            "g"
+            "g",
           ),
-          filePath
+          filePath,
         );
       /*
         .replace(
@@ -82,20 +82,20 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
         .replace(
           new RegExp(
             `(?<![\\w\\/])(\\.\\/|${base}\\/)?${escapeStringRegexp(
-              escapeHTML(target)
+              escapeHTML(target),
             )}(?![\\w\\/])`,
-            "g"
+            "g",
           ),
-          pathEscaped
+          pathEscaped,
         )
         .replace(
           new RegExp(
             `(?<![\\w\\/])(\\.\\/|${base}\\/)?${escapeStringRegexp(
-              target
+              target,
             )}(?![\\w\\/])`,
-            "g"
+            "g",
           ),
-          filePath
+          filePath,
         );
       /*
         .replace(

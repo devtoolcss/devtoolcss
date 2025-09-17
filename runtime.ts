@@ -23,7 +23,7 @@ export function inlineStyle() {
           el.style.setProperty(
             key,
             value.value,
-            value.important ? "important" : ""
+            value.important ? "important" : "",
           );
         });
       }
@@ -79,7 +79,7 @@ export function getFontRules(fontFiles) {
               ) {
                 cssText = cssText.replace(
                   /url\(([^)]*?)\)/g,
-                  `url('./assets/font/${fontFile}')`
+                  `url('./assets/font/${fontFile}')`,
                 );
                 fontCSSs.push(cssText);
                 break;

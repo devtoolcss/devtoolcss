@@ -117,7 +117,7 @@ export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
     const decls = Object.entries(rules)
       .map(
         ([prop, val]) =>
-          `${prop}: ${val.value}${val.important ? " !important" : ""};`
+          `${prop}: ${val.value}${val.important ? " !important" : ""};`,
       )
       .join("\n");
     stylesheet += `${selector} {\n${decls}\n}\n`;
@@ -142,7 +142,7 @@ export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
 
 export function replaceVariables(styleSheet) {
   const { css: cssReplaced } = postcss([postcssVarReplace()]).process(
-    styleSheet
+    styleSheet,
   );
 
   // Parse the CSS using postcss
