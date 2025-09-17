@@ -8,7 +8,9 @@ import {
 
 import * as CSSwhat from "css-what";
 
-export async function cascade(node, CSS, screenSize) {
+import type { CSSApi } from "./types.js";
+
+export async function cascade(node, CSS: CSSApi, screenSize) {
   //BUG: sometimes svg or some div nodeId=0
   const css = { "": {} };
 
