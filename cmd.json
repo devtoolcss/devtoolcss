@@ -1,7 +1,0 @@
-{"command": "CSS.trackComputedStyleUpdatesForNode", "parameters": {}}
-
-{"command": "CSS.getMatchedStylesForNode", "parameters": {"nodeId": }}
-
-{"command": "CSS.trackComputedStyleUpdates", "parameters": {"propertiesToTrack": [{"name": "color", "value": "black"}, {"name": "display", "value": "block"},{"name": "background-color", "value": "white"}] }}
-
-{"command": "CSS.trackComputedStyleUpdates", "parameters": {"propertiesToTrack": [{"name": "color", "value": "black"}] }}
