@@ -8,7 +8,8 @@
     "escape-html": "^1.0.3",
     "escape-string-regexp": "^5.0.0",
     "jsdom": "^26.1.0",
-    "postcss-var-replace": "^1.0.0"
+    "postcss-var-replace": "^1.0.0",
+    "tsx": "^4.20.5"
   },
   "devDependencies": {
     "@types/chrome-remote-interface": "^0.31.14",
@@ -17,11 +18,12 @@
     "@types/node": "^24.3.1",
     "postcss": "^8.5.6",
     "postcss-css-variables": "^0.19.0",
-    "ts-node": "^10.9.2",
+    "prettier": "^3.6.2",
     "typescript": "^5.9.2"
   },
   "scripts": {
-    "start": "ts-node cdp.ts",
+    "start": "tsx cdp.ts",
+    "format": "prettier --experimental-cli --write .",
     "build": "tsc",
     "type-check": "tsc --noEmit"
   }
