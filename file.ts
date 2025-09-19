@@ -18,7 +18,7 @@ export const MIME = [
 // handle wordpress %3F ending of filename
 export function getExtension(url) {
   const match = url.match(/\.([a-z0-9]+)(?:\?|%3F|#|$)/i);
-  return match ? "." + match[1].toLowerCase() : ".bin";
+  return match ? match[1] : "";
 }
 
 // handle wordpress %3F ending of filename

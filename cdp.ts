@@ -79,7 +79,7 @@ async function crawl(pageURL) {
     try {
       if (
         subtype === "octet-stream" &&
-        [".html", ".js", ".css"].includes(getExtension(filename))
+        ["html", "js", "css"].includes(getExtension(filename))
       )
         return;
     } catch {}
