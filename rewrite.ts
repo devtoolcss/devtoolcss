@@ -3,14 +3,16 @@ import escapeStringRegexp from "escape-string-regexp";
 import path from "path";
 
 export function rewriteResourceLinks(base, resources, outerHTML) {
-  // base decoded, no trailing '/'
+  console.log("base", base);
+  // base decoded, no trailing '/' EXCEPT root /
   for (const { url, path: filePath } of resources) {
     const pathEscaped = escapeHTML(filePath);
     //if (url.startsWith("http")) { // url must start with http
     const urlObj = new URL(url);
     // remove leading /
     const absPath = urlObj.pathname;
-    const relPath = path.relative(base, absPath); // no leading './'
+    const relPath =
+      path.relative(base, absPath) + (absPath.endsWith("/") ? "/" : ""); // no leading './', preserve trailing /
     const relPathUri = relPath + urlObj.search + urlObj.hash;
     const urlDecoded = decodeURI(url);
     // Escape special regex characters in url and urlPath
@@ -78,10 +80,11 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
     // ./ or / or without are the same, all base origin
     const relPathUriDecoded = decodeURI(relPathUri);
     for (const target of [relPathUri, relPathUriDecoded]) {
+      if (target.startsWith("_next")) console.log(target);
       outerHTML = outerHTML
         .replace(
           new RegExp(
-            `(?<![\\w\\/])(\\.\\/|${base}\\/)?${escapeStringRegexp(
+            `(?<![\\w\\/])(\\.\\/|${base === "/" ? "" : base}\\/)?${escapeStringRegexp(
               escapeHTML(target),
             )}(?![\\w\\/])`,
             "g",
@@ -90,7 +93,7 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
         )
         .replace(
           new RegExp(
-            `(?<![\\w\\/])(\\.\\/|${base}\\/)?${escapeStringRegexp(
+            `(?<![\\w\\/])(\\.\\/|${base === "/" ? "" : base}\\/)?${escapeStringRegexp(
               target,
             )}(?![\\w\\/])`,
             "g",
