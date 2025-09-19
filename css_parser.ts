@@ -73,9 +73,15 @@ export function getNormalizedSuffix(parsedSelector) {
   return pseudoClasses.join("") + (pseudoElement ? pseudoElement : "");
 }
 
-export function parseCSSProperties(cssProperties, css, variableOnly = false) {
+export function parseCSSProperties(
+  cssProperties,
+  cssText: string,
+  css,
+  variableOnly = false,
+) {
   //console.log(cssProperties);
-  const longhandProperties = new Set();
+  // TODO: fix logic, should remove if shorthand appear latter
+  //const longhandProperties = new Set();
   for (const prop of cssProperties) {
     // override to my definition
     //prop.explicit = Boolean(prop.range); // have false negative
@@ -83,11 +89,16 @@ export function parseCSSProperties(cssProperties, css, variableOnly = false) {
       prop.value = prop.value.replace(/\s*!important\s*$/, "");
     }
 
+    // longhandProperties not exist if first arg is var
+    // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
+    /*
     if (prop.longhandProperties) {
       for (const longhand of prop.longhandProperties) {
         longhandProperties.add(longhand.name);
       }
     }
+    */
+    prop.explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
 
     if (prop.disabled || prop.parsedOk === false) {
       // disable: commented property
@@ -105,7 +116,7 @@ export function parseCSSProperties(cssProperties, css, variableOnly = false) {
         css[prop.name] = {
           value: prop.value,
           important: Boolean(prop.important),
-          explicit: !longhandProperties.has(prop.name), //prop.explicit,
+          explicit: prop.explicit, //!longhandProperties.has(prop.name), //prop.explicit,
         };
       }
     }

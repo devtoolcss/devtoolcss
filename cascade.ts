@@ -29,6 +29,7 @@ export async function cascade(node, CSS: CSSApi, screenSize) {
         if (inheritedStyle.inlineStyle) {
           parseCSSProperties(
             inheritedStyle.inlineStyle.cssProperties,
+            inheritedStyle.inlineStyle.cssText,
             css[""],
             true,
           );
@@ -36,21 +37,40 @@ export async function cascade(node, CSS: CSSApi, screenSize) {
         if (inheritedStyle.matchedCSSRules) {
           for (const rule of inheritedStyle.matchedCSSRules) {
             if (rule.rule.origin !== "regular") continue;
-            parseCSSProperties(rule.rule.style.cssProperties, css[""], true);
+            parseCSSProperties(
+              rule.rule.style.cssProperties,
+              rule.rule.style.cssText,
+              css[""],
+              true,
+            );
           }
         }
       }
     }
 
     if (attributesStyle)
-      parseCSSProperties(attributesStyle.cssProperties, css[""]);
+      parseCSSProperties(
+        attributesStyle.cssProperties,
+        attributesStyle.cssText,
+        css[""],
+      );
 
     for (const rule of matchedCSSRules) {
       if (rule.rule.origin !== "regular") continue;
-      parseCSSProperties(rule.rule.style.cssProperties, css[""]);
+
+      parseCSSProperties(
+        rule.rule.style.cssProperties,
+        rule.rule.style.cssText,
+        css[""],
+      );
     }
 
-    if (inlineStyle) parseCSSProperties(inlineStyle.cssProperties, css[""]);
+    if (inlineStyle)
+      parseCSSProperties(
+        inlineStyle.cssProperties,
+        inlineStyle.cssText,
+        css[""],
+      );
 
     for (const match of pseudoElements) {
       //match.pseudoType
@@ -60,6 +80,7 @@ export async function cascade(node, CSS: CSSApi, screenSize) {
           const key = "::" + match.pseudoType;
           parseCSSProperties(
             rule.rule.style.cssProperties,
+            rule.rule.style.cssText,
             (css[key] = css[key] || {}),
           );
         }
@@ -137,6 +158,7 @@ export async function cascadePseudoClass(node, CSS, screenSize) {
             if (!suffix) continue;
             parseCSSProperties(
               rule.rule.style.cssProperties,
+              rule.rule.style.cssText,
               (pseudoCss[suffix] = pseudoCss[suffix] || {}),
             );
           }
