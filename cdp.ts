@@ -68,10 +68,10 @@ async function crawl(pageURL) {
   const requests: {
     [requestId: string]: { url: string; filename: string; type: string };
   } = {};
-  Network.on("responseReceived", (param) => {
+  Network.on("responseReceived", async (param) => {
     const url = param.response.url;
     if (url.startsWith("data:")) return;
-    const filename = getFilename(url);
+    const filename = await getFilename(url);
     const [type, subtype] = param.response.mimeType.split("/");
 
     // filter out unneeded resources
