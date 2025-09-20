@@ -456,22 +456,32 @@ async function crawl(pageURL) {
 
   console.log("Rewriting Links...");
   const pagePath = decodeURIComponent(getPath(pageURL));
+  // for fs path, decode URI components
+  const pagePathDecoded = decodeURIComponent(pagePath);
   let htmlDir, pageBase, htmlPath;
-  if (pagePath.endsWith(".html")) {
-    // can't tell dir or file by trailing slash
-    htmlDir = path.join(baseDir, path.dirname(pagePath));
-    htmlPath = path.join(htmlDir, path.basename(pagePath));
+  const ext = path.extname(pagePathDecoded);
+  if (ext === ".html" || ext === ".htm") {
+    htmlDir = path.join(this.cfg.outDir, path.dirname(pagePathDecoded));
+    htmlPath = path.join(htmlDir, path.basename(pagePathDecoded));
+    pageBase = path.dirname(pagePath);
+  } else if (ext) {
+    // handle extensions like .php, .asp, .aspx, etc
+    const pagePathRewritten =
+      pagePathDecoded.slice(0, pagePathDecoded.length - ext.length) + "html";
+    htmlDir = path.join(this.cfg.outDir, path.dirname(pagePathRewritten));
+    htmlPath = path.join(htmlDir, path.basename(pagePathRewritten));
     pageBase = path.dirname(pagePath);
   } else {
-    htmlDir = path.join(baseDir, pagePath);
+    // no extension or trailing slash
+    htmlDir = path.join(this.cfg.outDir, pagePathDecoded);
     htmlPath = path.join(htmlDir, "index.html");
-    pageBase = path.dirname(path.join(pagePath, "a"));
+    pageBase = path.dirname(path.join(pagePath, "dummy"));
   }
   const origin = getOrigin(pageURL);
   await Runtime.evaluate({
     expression:
-      sameSiteHrefToRelativePath.toString() +
-      `; sameSiteHrefToRelativePath(${JSON.stringify(origin)});`,
+      normalizeSameSiteHref.toString() +
+      `; normalizeSameSiteHref(${JSON.stringify(origin)});`,
   });
 
   // Get the updated HTML with inline styles
