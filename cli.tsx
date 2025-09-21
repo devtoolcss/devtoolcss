@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import React, { useEffect, useState } from "react";
 import { render, Box, Text, useApp } from "ink";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
 import {
   Crawler,
   CrawlConfig,
@@ -10,93 +8,15 @@ import {
   CrawlSummary,
 } from "./crawler.js";
 
+import { argsToConfig } from "./config.js";
+
 interface State {
   progress: CrawlProgress;
   summary?: CrawlSummary;
   startTime: number;
 }
 
-// --no- is reserved for negation
-const argv = yargs(hideBin(process.argv))
-  .scriptName("crawler")
-  .option("url", {
-    type: "string",
-    demandOption: true,
-    desc: "Root URL to crawl",
-  })
-  .option("out-dir", {
-    type: "string",
-    default: "./out",
-    desc: "Output directory",
-  })
-  .option("browser", {
-    type: "string",
-    default: "../chrome/linux-141.0.7378.3/chrome-linux64/chrome",
-    desc: "Chromium/Chrome executable path",
-  })
-  .option("headless", {
-    type: "boolean",
-    default: true,
-    desc: "Run browser with headful mode",
-  })
-  .option("breakpoints", {
-    type: "string",
-    default: "",
-    desc: "Comma-separated breakpoint widths",
-  })
-  .option("device-scale-factor", {
-    type: "number",
-    default: 1,
-    desc: "Device scale factor",
-  })
-  .option("screen-height", {
-    type: "number",
-    default: 800,
-    desc: "Viewport height for screens",
-  })
-  .option("recursive", {
-    type: "boolean",
-    default: false,
-    desc: "Recursively crawl same-site links",
-  })
-  .option("browser-scan", {
-    type: "boolean",
-    default: false,
-    desc: "Use browser for link extraction (slower, handling JS)",
-  })
-  .option("max-pages", {
-    type: "number",
-    default: 0,
-    desc: "Maximum number of pages to crawl (0 = no limit)",
-  })
-  .option("delay-after-nav", {
-    type: "number",
-    default: 1000,
-    desc: "Delay ms after navigation before processing",
-  })
-  .help()
-  .parseSync();
-
-const breakpoints = argv.breakpoints
-  ? argv.breakpoints
-      .split(",")
-      .map((s) => parseInt(s.trim()))
-      .filter((n) => !isNaN(n))
-  : [];
-
-const config: CrawlConfig = {
-  url: argv.url,
-  outDir: argv["out-dir"],
-  browserPath: argv.browser,
-  headless: argv["headless"],
-  breakpoints,
-  screenHeight: argv["screen-height"],
-  deviceScaleFactor: argv["device-scale-factor"],
-  recursive: argv["recursive"],
-  browserScan: argv["browser-scan"],
-  maxPages: argv["max-pages"],
-  delayAfterNavigateMs: argv["delay-after-nav"],
-};
+const config = argsToConfig();
 
 const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
   const { exit } = useApp();

@@ -35,8 +35,9 @@ export interface CrawlConfig {
   outDir: string;
   browserPath: string;
   headless: boolean;
-  breakpoints: number[];
   screenHeight: number;
+  breakpoints: number[];
+  deviceWidths: number[];
   deviceScaleFactor: number;
   recursive: boolean;
   browserScan: boolean;
@@ -480,32 +481,13 @@ export class Crawler extends EventEmitter {
   }
 
   private buildScreens() {
-    const breakpoints = this.cfg.breakpoints;
-    const screens: { width: number; height: number; mobile: boolean }[] = [];
-    if (breakpoints.length === 0) {
-      screens.push({
-        width: 1280,
+    return this.cfg.deviceWidths.map((width, i) => {
+      return {
+        width,
         height: this.cfg.screenHeight,
-        mobile: false,
-      });
-    } else {
-      for (let i = 0; i < breakpoints.length; i++) {
-        let width: number;
-        if (i === 0) width = Math.round(breakpoints[i] / 2);
-        else width = Math.round((breakpoints[i] + breakpoints[i + 1]) / 2);
-        screens.push({
-          width,
-          height: this.cfg.screenHeight,
-          mobile: false,
-        });
-      }
-      screens.push({
-        width: breakpoints[breakpoints.length - 1] + 100,
-        height: this.cfg.screenHeight,
-        mobile: false,
-      });
-    }
-    return screens;
+        mobile: false, // TODO: option? but seems not matter if no touch event
+      };
+    });
   }
 
   private async traverse(
