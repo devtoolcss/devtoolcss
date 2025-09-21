@@ -45,16 +45,37 @@ export interface CrawlConfig {
   delayAfterNavigateMs: number;
 }
 
+export enum CrawlStages {
+  Load = 0,
+  Cascade = 1,
+  CascadePseudo = 2,
+}
+
 export interface CrawlProgress {
-  phase: string;
-  currentUrl?: string;
-  queueSize?: number;
-  visitedCount?: number;
+  // page-level progress
+  totalPages: number;
+  finishedPages: number;
+  url: string;
+  // device-level progress within a page
+  deviceIndex: number;
+  // normalized stage identifier for UI highlighting
+  stageIndex: CrawlStages; // undefined when scanning
+  // element-level progress for cascade
   totalElements?: number;
   processedElements?: number;
-  resourcesDownloaded?: number;
-  fontsExtracted?: number;
-  message?: string;
+}
+
+export interface ScanProgress {
+  queued: number;
+  finished: number;
+  url: string;
+}
+
+export interface Progress {
+  phase?: "scanning" | "crawling";
+  message?: { level: "info" | "warning" | "error"; text: string };
+  scanProgress?: Partial<ScanProgress>;
+  crawlProgress?: Partial<CrawlProgress>;
 }
 
 export interface CrawlSummary {
@@ -88,18 +109,23 @@ export class Crawler extends EventEmitter {
 
     this.prepareDir();
 
+    this.emitProgress({
+      phase: "crawling",
+    });
     // crawling
-    this.emitProgress({ message: "Crawling..." });
     for (var i = 0; i < pageURLs.length; i++) {
       const url = pageURLs[i];
+      // announce page start (used by UI for progress and stage highlighting)
+      this.emitProgress({
+        crawlProgress: {
+          totalPages: pageURLs.length,
+          finishedPages: succURLs.length,
+          url,
+        },
+      });
+      const startTime = Date.now();
       try {
         await this.crawlSingle(url, this.assetDir);
-        this.emitProgress({
-          phase: "crawled",
-          currentUrl: url,
-          queueSize: pageURLs.length - i - 1,
-          visitedCount: succURLs.length,
-        });
         succURLs.push(url);
         fs.writeFileSync(
           this.fontCSSPath,
@@ -107,8 +133,15 @@ export class Crawler extends EventEmitter {
           "utf-8",
         );
       } catch (e) {
-        console.error(e);
+        this.emitProgress({ message: { level: "error", text: String(e) } });
       }
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      this.emitProgress({
+        message: {
+          level: "info",
+          text: `Finished ${url} in ${elapsed}s`,
+        },
+      });
     }
 
     // cleanup empty dirs
@@ -118,7 +151,6 @@ export class Crawler extends EventEmitter {
         fs.rmdirSync(dirPath);
     }
 
-    this.emitProgress({ phase: "done", message: "Completed crawl" });
     return {
       visited: [...succURLs],
       outDir: this.cfg.outDir,
@@ -130,13 +162,12 @@ export class Crawler extends EventEmitter {
     if (this.browserProc) this.browserProc.kill();
   }
 
-  private emitProgress(p: Partial<CrawlProgress>) {
+  private emitProgress(p: Progress) {
     this.emit("progress", p);
   }
 
   private async launchBrowser() {
     const { browserPath, headless } = this.cfg;
-    this.emitProgress({ phase: "starting", message: "Launching browser" });
     const headlessFlag = headless ? "--headless" : "";
     const browserCmd = `${browserPath} ${headlessFlag} --remote-debugging-port=9222`;
     this.browserProc = exec(browserCmd);
@@ -144,7 +175,6 @@ export class Crawler extends EventEmitter {
   }
 
   private async extractLinksFetch(pageURL: string): Promise<string[]> {
-    //const startTime = Date.now();
     const response = await fetch(pageURL);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -155,8 +185,6 @@ export class Crawler extends EventEmitter {
     }
 
     const html = await response.text();
-    //const elapsed = Date.now() - startTime;
-    //console.log(`Fetched ${pageURL} in ${elapsed} ms`);
     const dom = new JSDOM(html);
     const anchorElements = dom.window.document.querySelectorAll("a");
     const links: string[] = [];
@@ -200,16 +228,21 @@ export class Crawler extends EventEmitter {
     const queue: string[] = [normalizePageURL(this.cfg.url)];
 
     const origin = getOrigin(this.cfg.url);
+
+    this.emitProgress({ phase: "scanning" });
+
     while (
       queue.length &&
       (!this.cfg.maxPages || pages.size < this.cfg.maxPages)
     ) {
       const url = queue.shift()!;
       this.emitProgress({
-        phase: "scannning pages",
-        currentUrl: url,
-        queueSize: queue.length,
-        visitedCount: pages.size,
+        phase: "scanning",
+        scanProgress: {
+          url: url,
+          queued: queue.length,
+          finished: pages.size,
+        },
       });
       try {
         const pageLinks = browser
@@ -232,12 +265,18 @@ export class Crawler extends EventEmitter {
           }
         }
       } catch (e: any) {
-        console.error(`Error scanning ${url}: ${e.message}`);
+        this.emitProgress({
+          message: {
+            level: "warning",
+            text: `Error scanning ${url}: ${e.message}`,
+          },
+        });
         continue;
       }
     }
-    console.log([...pages]);
-    console.log("Total pages found", pages.size);
+
+    const messageText = `${pages.size} pages found:\n${[...pages].join("\n")}\n`;
+    this.emitProgress({ message: { level: "info", text: messageText } });
     return [...pages];
   }
 
@@ -250,6 +289,16 @@ export class Crawler extends EventEmitter {
   }
 
   private async crawlSingle(pageURL: string, assetDir: string): Promise<void> {
+    // init progress for this page
+    this.emitProgress({
+      crawlProgress: {
+        deviceIndex: 0,
+        stageIndex: CrawlStages.Load,
+        totalElements: 0,
+        processedElements: 0,
+      },
+    });
+
     const target = await CDP.New();
     const client = await CDP({ target: target.id });
     const { DOM, CSS, Page, Runtime, Network, Emulation } = client;
@@ -336,7 +385,6 @@ export class Crawler extends EventEmitter {
     await Page.enable();
     await Network.enable();
 
-    this.emitProgress({ phase: "navigate", currentUrl: pageURL });
     const navResult = await Page.navigate({ url: pageURL });
     if (navResult.errorText)
       throw new Error(`Navigation failed: ${navResult.errorText}`);
@@ -354,6 +402,12 @@ export class Crawler extends EventEmitter {
         height,
         deviceScaleFactor: this.cfg.deviceScaleFactor,
         mobile,
+      });
+
+      this.emitProgress({
+        crawlProgress: {
+          deviceIndex: i,
+        },
       });
 
       if (this.cfg.delayAfterNavigateMs)
@@ -375,9 +429,12 @@ export class Crawler extends EventEmitter {
       };
       await this.traverse(root as any, countElements, true);
       this.emitProgress({
-        phase: "cascade",
-        totalElements,
-        processedElements: 0,
+        phase: "crawling",
+        crawlProgress: {
+          stageIndex: CrawlStages.Cascade,
+          totalElements,
+          processedElements: 0,
+        },
       });
 
       let processed = 0;
@@ -387,9 +444,12 @@ export class Crawler extends EventEmitter {
           await cascade(node, CSS, i);
           processed += 1;
           this.emitProgress({
-            phase: "cascade",
-            processedElements: processed,
-            totalElements,
+            phase: "crawling",
+            crawlProgress: {
+              stageIndex: CrawlStages.Cascade,
+              totalElements,
+              processedElements: processed,
+            },
           });
         },
         true,
@@ -401,9 +461,12 @@ export class Crawler extends EventEmitter {
           await cascadePseudoClass(node, CSS, i);
           processed += 1;
           this.emitProgress({
-            phase: "cascade-pseudo",
-            processedElements: processed,
-            totalElements,
+            phase: "crawling",
+            crawlProgress: {
+              stageIndex: CrawlStages.CascadePseudo,
+              totalElements,
+              processedElements: processed,
+            },
           });
         },
         false,
@@ -421,7 +484,6 @@ export class Crawler extends EventEmitter {
 
     await this.prepareCSSAttributes(root as any, DOM, screens);
 
-    this.emitProgress({ phase: "fonts", message: "Extracting fonts" });
     const { result: resultFonts } = await Runtime.evaluate({
       expression:
         getFontRules.toString() +

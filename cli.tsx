@@ -1,52 +1,80 @@
 #!/usr/bin/env node
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { render, Box, Text, useApp } from "ink";
+import chalk from "chalk";
 import {
   Crawler,
   CrawlConfig,
   CrawlProgress,
+  ScanProgress,
   CrawlSummary,
+  CrawlStages,
+  Progress,
 } from "./crawler.js";
 
 import { argsToConfig } from "./config.js";
-
-interface State {
-  progress: CrawlProgress;
-  summary?: CrawlSummary;
-  startTime: number;
-}
 
 const config = argsToConfig();
 
 const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
   const { exit } = useApp();
-  const [state, setState] = useState<State>({
-    progress: { phase: "init" },
-    startTime: Date.now(),
+  const [phase, setPhase] = useState<"scanning" | "crawling" | "error">(
+    "scanning",
+  );
+  const [scanProgress, setScanProgress] = useState<Partial<ScanProgress>>({
+    queued: 0,
+    finished: 0,
+    url: "",
   });
+  const [crawlProgress, setCrawlProgress] = useState<CrawlProgress>({
+    totalPages: 0,
+    finishedPages: 0,
+    url: "",
+    deviceIndex: 0,
+    stageIndex: CrawlStages.Load,
+  });
+  const [summary, setSummary] = useState<CrawlSummary | null>(null);
+  const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const crawler = new Crawler(cfg);
-    const onProgress = (p: Partial<CrawlProgress>) => {
-      setState((s) => ({ ...s, progress: { ...s.progress, ...p } }));
+    const onProgress = (p: Progress) => {
+      if (p.phase) setPhase(p.phase);
+      if (p.message) {
+        switch (p.message.level) {
+          case "warning":
+            console.log(chalk.yellow(p.message.text));
+            break;
+          case "error":
+            console.log(chalk.red(p.message.text));
+            break;
+          default: // info
+            console.log(p.message.text);
+            break;
+        }
+      }
+      if (p.scanProgress) {
+        setScanProgress((s) => ({ ...s, ...p.scanProgress }));
+      }
+      if (p.crawlProgress) {
+        setCrawlProgress((s) => ({ ...s, ...p.crawlProgress }));
+      }
     };
     crawler.on("progress", onProgress);
-    crawler.start().then((summary) => {
-      setState((s) => ({ ...s, summary }));
-      setTimeout(() => {
-        exit();
-        process.exit(0);
-      }, 200); // allow last frame render
-    });
+    crawler
+      .start()
+      .then((s: CrawlSummary) => {
+        setSummary(s);
+        setTimeout(() => {
+          exit();
+          process.exit(0);
+        }, 200); // allow last frame render
+      })
+      .catch((e: any) => {
+        setPhase("error");
+      });
     const handleSig = () => {
-      //console.log(isRawModeSupported);
-      //if (isRawModeSupported) setRawMode(false);
-      //spawnSync("stty", ["-a"], { stdio: "inherit" }); // reset terminal after raw mode
-      // the ^[[A on terminal after ctrl-c is caused by node
-      // https://github.com/nodejs/node/issues/41143
       crawler.stop();
-      //rl.close();
-      //exit();
       process.exit(0);
     };
     process.on("SIGINT", handleSig);
@@ -56,11 +84,8 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
     });
     // Extra cleanup on unhandled rejections
     process.on("unhandledRejection", (r) => {
-      setState((s) => ({
-        ...s,
-        progress: { ...s.progress, phase: "error", message: String(r) },
-      }));
-      crawler.stop();
+      setPhase("error");
+      handleSig();
     });
     return () => {
       crawler.stop();
@@ -71,58 +96,172 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
     };
   }, [cfg, exit]);
 
-  const { progress, summary, startTime } = state;
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  // UI helpers
+  const stageTexts: Array<NonNullable<string>> = [
+    "Load",
+    "Cascade",
+    "Cascade Pseudo",
+  ];
+
+  const devices = useMemo(
+    () => cfg.deviceWidths.map((w, i) => ({ index: i, width: w })),
+    [cfg.deviceWidths],
+  );
+  const activeDeviceIndex = crawlProgress.deviceIndex;
+  const pagesTotal = crawlProgress.totalPages;
+  const finishedPages = crawlProgress.finishedPages;
+  const currentStageIndex = crawlProgress.stageIndex;
+  const elementsProgressPercent =
+    (crawlProgress.totalElements || 0) > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((crawlProgress.processedElements ?? 0) /
+              (crawlProgress.totalElements || 1)) *
+              100,
+          ),
+        )
+      : undefined;
+
+  const ConfigEntry = ({
+    name,
+    value,
+    valueColor,
+  }: {
+    name: string;
+    value: string;
+    valueColor?: string;
+  }) => (
+    <Text>
+      {(name + ":").padEnd(16)} <Text color={valueColor}>{value}</Text>
+    </Text>
+  );
 
   return (
-    <Box
-      flexDirection="column"
-      padding={1}
-      borderStyle="round"
-      borderColor="cyan"
-    >
-      <Text>
-        Crawl <Text color="green">{cfg.url}</Text> {"->"}{" "}
-        <Text color="yellow">{cfg.outDir}</Text> elapsed {elapsed}s
-      </Text>
-      <Box>
-        <Box flexDirection="column" width={50} marginRight={2}>
-          <Text>
-            Breakpoints:{" "}
-            {cfg.breakpoints.length ? cfg.breakpoints.join(",") : "none"}
-          </Text>
-          {progress.currentUrl && <Text>URL: {progress.currentUrl}</Text>}
-          {progress.queueSize !== undefined && (
-            <Text>Queue: {progress.queueSize}</Text>
-          )}
-          {progress.visitedCount !== undefined && (
-            <Text>Visited: {progress.visitedCount}</Text>
-          )}
-          <Text>Phase: {progress.phase}</Text>
-          {progress.totalElements !== undefined && (
+    <>
+      {/* Configs Header */}
+      <Box
+        flexDirection="column"
+        marginBottom={1}
+        padding={1}
+        paddingTop={0}
+        borderStyle="round"
+        borderColor="cyan"
+      >
+        <Text color={"cyan"} bold>
+          Configs:
+        </Text>
+
+        <ConfigEntry name="Site URL" value={cfg.url} valueColor="green" />
+        <ConfigEntry name="Output Dir" value={cfg.outDir} valueColor="yellow" />
+        <ConfigEntry name="Browser" value={cfg.browserPath} />
+        <ConfigEntry
+          name="Breakpoints"
+          value={cfg.breakpoints.length ? cfg.breakpoints.join(", ") : "none"}
+          valueColor="red"
+        />
+        <ConfigEntry name="Device widths" value={cfg.deviceWidths.join(", ")} />
+        <ConfigEntry name="Device Height" value={String(cfg.screenHeight)} />
+        <ConfigEntry name="Scale" value={String(cfg.deviceScaleFactor)} />
+        <ConfigEntry
+          name="Delay after nav"
+          value={String(cfg.delayAfterNavigateMs) + "ms"}
+        />
+        <Text>
+          Other Settings:{" "}
+          <Text color={cfg.recursive ? "" : "gray"}>Recursive</Text>{" "}
+          <Text color={cfg.browserScan ? "" : "gray"}>BrowserScan</Text>{" "}
+          <Text color={cfg.headless ? "" : "gray"}>Headless</Text>
+        </Text>
+      </Box>
+
+      {/* Progress */}
+      {phase === "scanning" && (
+        <Box flexDirection="column" marginBottom={1}>
+          {scanProgress.url && (
             <Text>
-              Elements: {progress.processedElements ?? 0}/
-              {progress.totalElements}
+              Scanning: <Text color="magenta">{scanProgress.url}</Text>
             </Text>
           )}
-          {progress.resourcesDownloaded !== undefined && (
-            <Text>Resources: {progress.resourcesDownloaded}</Text>
-          )}
-          {progress.fontsExtracted !== undefined && (
-            <Text>Fonts: {progress.fontsExtracted}</Text>
-          )}
-          {progress.message && <Text color="gray">{progress.message}</Text>}
-          {summary && (
-            <>
-              <Text color="green">
-                Done. Pages: {summary.visited.length} Fonts:{" "}
-                {summary.fontsCssCount}
-              </Text>
-            </>
-          )}
+          <Text>
+            Queue: {scanProgress.queued ?? 0} | Visited:{" "}
+            {scanProgress.finished ?? 0}
+          </Text>
         </Box>
-      </Box>
-    </Box>
+      )}
+
+      {phase === "crawling" && (
+        <>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text>
+              Page ({finishedPages + 1}/{pagesTotal}):{" "}
+              <Text color="magenta">{crawlProgress.url}</Text>
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginBottom={1}>
+            <Box rowGap={1}>
+              {devices.map((d) => (
+                <Text
+                  key={d.index}
+                  backgroundColor={d.index === activeDeviceIndex ? "cyan" : ""}
+                  color={
+                    d.index < activeDeviceIndex
+                      ? "green"
+                      : d.index === activeDeviceIndex
+                        ? "black"
+                        : "gray"
+                  }
+                >
+                  {` ${d.width}px `}
+                </Text>
+              ))}
+            </Box>
+            <Box marginBottom={1}>
+              {stageTexts.map((stgText, i) => {
+                const isActive = currentStageIndex === i;
+                const color = isActive
+                  ? ""
+                  : (currentStageIndex ?? -1) > i
+                    ? "green"
+                    : "gray";
+                const decoL = isActive ? "▶" : "";
+                return (
+                  <Box key={stgText} marginRight={2}>
+                    <Text>{decoL}</Text>
+                    <Text> </Text>
+                    <Text color={color}>{stgText}</Text>
+                  </Box>
+                );
+              })}
+            </Box>
+            {elementsProgressPercent !== undefined &&
+              (currentStageIndex === CrawlStages.Cascade ||
+                currentStageIndex === CrawlStages.CascadePseudo) && (
+                <Box paddingLeft={2}>
+                  <Text>
+                    {stageTexts[currentStageIndex]} |{" "}
+                    <Text color="yellow">
+                      {elementsProgressPercent}% (
+                      {crawlProgress.processedElements}/
+                      {crawlProgress.totalElements})
+                    </Text>
+                  </Text>
+                  {/*
+                <ProgressBar value={elementsProgress} />
+                */}
+                </Box>
+              )}
+          </Box>
+        </>
+      )}
+
+      {/* Footer / messages */}
+      {summary && (
+        <Text color="green">
+          Done. Pages: {summary.visited.length} Fonts: {summary.fontsCssCount}
+        </Text>
+      )}
+    </>
   );
 };
 

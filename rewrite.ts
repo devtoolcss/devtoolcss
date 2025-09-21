@@ -3,7 +3,6 @@ import escapeStringRegexp from "escape-string-regexp";
 import path from "path";
 
 export function rewriteResourceLinks(base, resources, outerHTML) {
-  console.log("base", base);
   // base decoded, no trailing '/' EXCEPT root /
   for (const { url, path: filePath } of resources) {
     const pathEscaped = escapeHTML(filePath);
