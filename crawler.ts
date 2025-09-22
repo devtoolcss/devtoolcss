@@ -439,9 +439,8 @@ export class Crawler extends EventEmitter {
     };
 
     // cannot have multiple at a time
-    function setChildrenPromise(node: Node) {
-      return new Promise<void>((resolve) => {
-        //console.log(client.once);
+    async function getChildren(node: Node): Promise<void> {
+      const childrenPromise = new Promise<void>((resolve) => {
         var removeListener;
         removeListener = DOM.on("setChildNodes", (params) => {
           if (node.nodeId !== params.parentId) return;
@@ -450,14 +449,32 @@ export class Crawler extends EventEmitter {
           buildNodeMap(node);
           resolve();
         });
+
+        // no children to request, also good
+        setTimeout(() => {
+          removeListener();
+          resolve();
+        }, 1000);
       });
+      DOM.requestChildNodes({
+        nodeId: node.nodeId,
+        depth: -1,
+      });
+    await childrenPromise;
     }
 
-    const childrenPromise = setChildrenPromise(docRoot);
-    await DOM.requestChildNodes({ nodeId: docRoot.nodeId, depth: -1 });
-    await childrenPromise;
+    await getChildren(docRoot);
 
     async function processUpdateQueue() {
+      /* currently handled by setTimeout
+      const deletedSet = new Set<number>();
+      for (const param of updateQueue) {
+        if (param["nodeId"] !== undefined) {
+          deletedSet.add(param["nodeId"]);
+        }
+      }
+      */
+
       async function updateNode(param) {
         function findNodeIdx(nodes: Node[], nodeId: number): number {
           for (var i = 0; i < nodes.length; i++) {
@@ -472,6 +489,7 @@ export class Crawler extends EventEmitter {
         if (parentNode) {
           if (param["previousNodeId"] !== undefined) {
             // insert
+            //if (deletedSet.has(param["nodeId"])) return;
             const prevIdx =
               param["previousNodeId"] === 0
                 ? -1
@@ -479,14 +497,18 @@ export class Crawler extends EventEmitter {
             if (prevIdx !== null) {
               // describeNode depth -1 is buggy, often return nodeId=0, causing bug
               // devtools use DOM.requestChildNodes and receive the results from DOM.setChildNodes event
-              const childrenPromise = setChildrenPromise(param["node"]);
-
               parentNode.children.splice(prevIdx + 1, 0, param["node"]);
-              await DOM.requestChildNodes({
-                nodeId: param["node"].nodeId,
-                depth: -1,
-              });
-              await childrenPromise;
+
+              // the node from insert event may or maynot have children initialized
+              // hope not partially initialized like describeNode
+              const node: Node = param["node"];
+              if (
+                node.nodeType === CDPNodeType.ELEMENT_NODE &&
+                node.childNodeCount > 0 &&
+                !node.children
+              ) {
+                await getChildren(node);
+              }
             }
           } else {
             const idx = findNodeIdx(parentNode.children, param["nodeId"]);
@@ -526,7 +548,7 @@ export class Crawler extends EventEmitter {
 
       if (node.children) {
         for (const child of node.children) {
-          const res = getBody(child as Node, depth + 1);
+          const res = getBody(child, depth + 1);
           if (res) return res;
         }
       }
