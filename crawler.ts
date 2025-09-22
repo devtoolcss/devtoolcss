@@ -427,7 +427,7 @@ export class Crawler extends EventEmitter {
       root = res.node;
 
       let totalElements = 0;
-      const countElements = async (node: Node) => {
+      const countElements = (node: Node) => {
         totalElements += 1;
         node.css = {};
       };
@@ -558,7 +558,7 @@ export class Crawler extends EventEmitter {
 
   private async traverse(
     node: Node,
-    callback: (n: Node) => Promise<void>,
+    callback: (n: Node) => Promise<void> | void,
     parallel = false,
   ) {
     if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return; // element
