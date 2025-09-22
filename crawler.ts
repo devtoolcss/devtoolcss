@@ -79,8 +79,9 @@ export interface Progress {
 }
 
 export interface CrawlSummary {
-  visited: string[];
-  outDir: string;
+  succeeded: number;
+  failed: number;
+  downloadCount: number;
   fontsCssCount: number;
 }
 
@@ -106,6 +107,7 @@ export class Crawler extends EventEmitter {
       : [this.cfg.url];
 
     const succURLs: string[] = [];
+    var failedCount = 0;
 
     this.prepareDir();
 
@@ -134,6 +136,7 @@ export class Crawler extends EventEmitter {
         );
       } catch (e) {
         this.emitProgress({ message: { level: "error", text: String(e) } });
+        failedCount++;
       }
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       this.emitProgress({
@@ -152,8 +155,9 @@ export class Crawler extends EventEmitter {
     }
 
     return {
-      visited: [...succURLs],
-      outDir: this.cfg.outDir,
+      failed: failedCount,
+      succeeded: succURLs.length,
+      downloadCount: this.downloadedURLs.size,
       fontsCssCount: this.fontCSSSet.size,
     };
   }

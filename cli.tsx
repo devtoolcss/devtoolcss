@@ -258,7 +258,27 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       {/* Footer / messages */}
       {summary && (
         <Text color="green">
-          Done. Pages: {summary.visited.length} Fonts: {summary.fontsCssCount}
+          Crawl completed in{" "}
+          <Text color="yellow" bold>
+            {Math.round((Date.now() - startTimeRef.current) / 1000)}s
+          </Text>
+          .{" "}
+          <Text color="yellow" bold>
+            {summary.succeeded}
+          </Text>{" "}
+          pages succeeded,{" "}
+          <Text color="yellow" bold>
+            {summary.failed}
+          </Text>{" "}
+          pages failed,{" "}
+          <Text color="yellow" bold>
+            {summary.downloadCount}
+          </Text>{" "}
+          resources downloaded.{" "}
+          <Text color="yellow" bold>
+            {summary.fontsCssCount}
+          </Text>{" "}
+          CSS @font-face rules found.
         </Text>
       )}
     </>
