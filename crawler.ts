@@ -681,11 +681,11 @@ export class Crawler extends EventEmitter {
       true,
     );
 
-    function toJSDOM(cdpRoot: Node) {
+    const toJSDOM = (cdpRoot: Node) => {
       const dom = new JSDOM("<html><body></body></html>");
       const document: Document = dom.window.document;
 
-      function buildNode(cdpNode: Node, document: Document): HTMLElement {
+      const buildNode = (cdpNode: Node, document: Document): HTMLElement => {
         let node;
 
         switch (cdpNode.nodeType) {
@@ -727,7 +727,12 @@ export class Crawler extends EventEmitter {
             return null;
 
           default:
-            console.warn("Unsupported node type:", cdpNode.nodeType, cdpNode);
+            this.emitProgress({
+              message: {
+                level: "warning",
+                text: `Unsupported node type: ${cdpNode.nodeType}\n${cdpNode}`,
+              },
+            });
             return null;
         }
 
@@ -740,13 +745,13 @@ export class Crawler extends EventEmitter {
         }
 
         return node;
-      }
+      };
 
       const jsdomRoot = buildNode(cdpRoot, document);
       const htmlNode = document.querySelector("html");
       htmlNode.replaceChild(jsdomRoot, htmlNode.querySelector("body"));
       return dom;
-    }
+    };
 
     const dom = toJSDOM(cdpRoot);
     this.cleanTags(dom.window.document);
