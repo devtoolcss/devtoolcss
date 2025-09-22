@@ -135,7 +135,12 @@ export class Crawler extends EventEmitter {
           "utf-8",
         );
       } catch (e) {
-        this.emitProgress({ message: { level: "error", text: String(e) } });
+        this.emitProgress({
+          message: {
+            level: "error",
+            text: e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
+          },
+        });
         failedCount++;
       }
       const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -268,11 +273,11 @@ export class Crawler extends EventEmitter {
             queue.push(normalizedLink);
           }
         }
-      } catch (e: any) {
+      } catch (e) {
         this.emitProgress({
           message: {
             level: "warning",
-            text: `Error scanning ${url}: ${e.message}`,
+            text: `Error scanning ${url}: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}`,
           },
         });
         continue;
