@@ -79,7 +79,6 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
     // ./ or / or without are the same, all base origin
     const relPathUriDecoded = decodeURI(relPathUri);
     for (const target of [relPathUri, relPathUriDecoded]) {
-      if (target.startsWith("_next")) console.log(target);
       outerHTML = outerHTML
         .replace(
           new RegExp(
