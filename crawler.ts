@@ -15,8 +15,6 @@ import {
 } from "./file.js";
 import { rewriteResourceLinks } from "./rewrite.js";
 import {
-  inlineStyle,
-  cleanTags,
   getFontRules,
   getAnchorHref,
   normalizeSameSiteHref,
@@ -92,12 +90,14 @@ export class Crawler extends EventEmitter {
   private downloadedURLs = new Set<string>();
   private assetDir = "";
   private fontCSSPath = "";
+  private screens: { width: number; height: number; mobile: boolean }[] = [];
 
   constructor(cfg: CrawlConfig) {
     super();
     this.cfg = cfg;
     this.assetDir = path.join(this.cfg.outDir, "assets");
     this.fontCSSPath = path.join(this.cfg.outDir, "fonts.css");
+    this.screens = this.buildScreens();
   }
 
   async start(): Promise<CrawlSummary> {
@@ -319,7 +319,7 @@ export class Crawler extends EventEmitter {
         mimeType: string;
       };
     } = {};
-    Network.on("responseReceived", (param) => {
+    const removeResponseReceived = Network.on("responseReceived", (param) => {
       const url = param.response.url;
       if (url.startsWith("data:")) return;
       const filenamePromise = getFilename(url);
@@ -398,14 +398,143 @@ export class Crawler extends EventEmitter {
     if (navResult.errorText)
       throw new Error(`Navigation failed: ${navResult.errorText}`);
     await Page.loadEventFired();
+    // Slowly scroll to bottom to trigger lazy loading
     await Runtime.evaluate({
-      expression: "window.scrollTo(0, document.body.scrollHeight);",
+      expression: `
+      (async () => {
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+        let lastScroll = -1;
+        let sameCount = 0;
+        for (let y = 0; y < document.body.scrollHeight; y += 200) {
+        window.scrollTo(0, y);
+        await delay(100);
+        if (window.scrollY === lastScroll) {
+          sameCount++;
+          if (sameCount > 5) break;
+        } else {
+          sameCount = 0;
+        }
+        lastScroll = window.scrollY;
+        }
+        window.scrollTo(0, document.body.scrollHeight);
+      })();
+      `,
+      awaitPromise: true,
     });
 
-    let root: Node;
-    const screens = this.buildScreens();
-    for (let i = 0; i < screens.length; i++) {
-      const { width, height, mobile } = screens[i];
+    const { root: docRoot } = await DOM.getDocument({ depth: 0 });
+    // default 1 will cause later setChildNode parentId not docRoot's
+    // always use requestChildNodes for aligning the usage of devtools
+
+    // Maintain a map for efficient node lookup by nodeId
+    const nodeMap = new Map<number, Node>(); // just for lookup, only add (nodeId unique), no delete
+    const updateQueue: Array<any> = [];
+    const buildNodeMap = (node: Node) => {
+      nodeMap.set(node.nodeId, node);
+      if (node.children) {
+        for (const child of node.children) {
+          buildNodeMap(child);
+        }
+      }
+    };
+
+    // cannot have multiple at a time
+    function setChildrenPromise(node: Node) {
+      return new Promise<void>((resolve) => {
+        //console.log(client.once);
+        var removeListener;
+        removeListener = DOM.on("setChildNodes", (params) => {
+          if (node.nodeId !== params.parentId) return;
+          removeListener();
+          node.children = params.nodes;
+          buildNodeMap(node);
+          resolve();
+        });
+      });
+    }
+
+    const childrenPromise = setChildrenPromise(docRoot);
+    await DOM.requestChildNodes({ nodeId: docRoot.nodeId, depth: -1 });
+    await childrenPromise;
+
+    async function processUpdateQueue() {
+      async function updateNode(param) {
+        function findNodeIdx(nodes: Node[], nodeId: number): number {
+          for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].nodeId === nodeId) {
+              return i;
+            }
+          }
+          return null;
+        }
+
+        const parentNode = nodeMap.get(param.parentNodeId);
+        if (parentNode) {
+          if (param["previousNodeId"] !== undefined) {
+            // insert
+            const prevIdx =
+              param["previousNodeId"] === 0
+                ? -1
+                : findNodeIdx(parentNode.children, param["previousNodeId"]);
+            if (prevIdx !== null) {
+              // describeNode depth -1 is buggy, often return nodeId=0, causing bug
+              // devtools use DOM.requestChildNodes and receive the results from DOM.setChildNodes event
+              const childrenPromise = setChildrenPromise(param["node"]);
+
+              parentNode.children.splice(prevIdx + 1, 0, param["node"]);
+              await DOM.requestChildNodes({
+                nodeId: param["node"].nodeId,
+                depth: -1,
+              });
+              await childrenPromise;
+            }
+          } else {
+            const idx = findNodeIdx(parentNode.children, param["nodeId"]);
+            if (idx !== -1) {
+              parentNode.children.splice(idx, 1);
+            }
+          }
+        }
+      }
+      while (updateQueue.length > 0) {
+        await updateNode(updateQueue.shift());
+      }
+    }
+
+    DOM.on("childNodeInserted", (params) => {
+      updateQueue.push({
+        parentNodeId: params.parentNodeId,
+        previousNodeId: params.previousNodeId,
+        node: params.node,
+      });
+    });
+
+    DOM.on("childNodeRemoved", (params) => {
+      updateQueue.push({
+        parentNodeId: params.parentNodeId,
+        nodeId: params.nodeId,
+      });
+    });
+
+    DOM.on("documentUpdated", () => {
+      throw new Error("Document completely updated, cannot cascade");
+    });
+
+    function getBody(node: Node, depth: number): Node | null {
+      if (node.nodeName.toLowerCase() === "body") return node;
+      else if (depth === 3) return null;
+
+      if (node.children) {
+        for (const child of node.children) {
+          const res = getBody(child as Node, depth + 1);
+          if (res) return res;
+        }
+      }
+    }
+
+    const roots = [];
+    for (let i = 0; i < this.screens.length; i++) {
+      const { width, height, mobile } = this.screens[i];
       await Emulation.setDeviceMetricsOverride({
         width,
         height,
@@ -415,40 +544,29 @@ export class Crawler extends EventEmitter {
 
       this.emitProgress({
         crawlProgress: {
+          stageIndex: CrawlStages.Load,
           deviceIndex: i,
         },
       });
 
-      if (this.cfg.delayAfterNavigateMs)
+      if (this.cfg.delayAfterNavigateMs) {
         await new Promise((r) => setTimeout(r, this.cfg.delayAfterNavigateMs));
+      }
 
-      const { root: docRoot } = await DOM.getDocument({ depth: -1 });
-      const { nodeId } = await DOM.querySelector({
-        selector: "body",
-        nodeId: docRoot.nodeId,
-      });
-      if (!nodeId) throw new Error("Body not found");
-      const res = await DOM.describeNode({ nodeId, depth: -1 });
-      root = res.node;
+      await processUpdateQueue();
+      const root = getBody(docRoot, 0);
+      if (!root) throw new Error("No body element found");
 
       let totalElements = 0;
       const countElements = (node: Node) => {
         totalElements += 1;
         node.css = {};
       };
-      await this.traverse(root as any, countElements, true);
-      this.emitProgress({
-        phase: "crawling",
-        crawlProgress: {
-          stageIndex: CrawlStages.Cascade,
-          totalElements,
-          processedElements: 0,
-        },
-      });
+      await this.traverse(root, countElements, true);
 
       let processed = 0;
       await this.traverse(
-        root as any,
+        root,
         async (node) => {
           await cascade(node, CSS, i);
           processed += 1;
@@ -465,7 +583,7 @@ export class Crawler extends EventEmitter {
       );
       processed = 0;
       await this.traverse(
-        root as any,
+        root,
         async (node) => {
           await cascadePseudoClass(node, CSS, i);
           processed += 1;
@@ -480,10 +598,64 @@ export class Crawler extends EventEmitter {
         },
         false,
       );
+
+      function cleanUp(node: Node) {
+        for (const rulesObj of Object.values(node.css || {})) {
+          for (const [selector, rules] of Object.entries(rulesObj)) {
+            for (const [prop, value] of Object.entries(rules)) {
+              if (!value.explicit) {
+                delete rules[prop];
+              } else {
+                delete value.explicit;
+              }
+            }
+          }
+        }
+      }
+
+      async function setIdAttrs(node: Node) {
+        let id = `node-${node.nodeId}`;
+        let hasId = false;
+        if (!node.attributes) {
+          const { attributes } = await DOM.getAttributes({
+            nodeId: node.nodeId,
+          });
+          node.attributes = attributes;
+        }
+        for (let i = 0; i < node.attributes.length; i += 2) {
+          if (node.attributes[i] === "id") {
+            id = node.attributes[i + 1];
+            hasId = true;
+            break;
+          }
+        }
+        if (!hasId) {
+          node.attributes.push("id", id);
+        }
+        node.id = id;
+        for (const rulesObj of Object.values(node.css || {})) {
+          for (const [selector, rules] of Object.entries(rulesObj)) {
+            (rulesObj as any)[`#${id}` + selector] = rules;
+            delete (rulesObj as any)[selector];
+          }
+        }
+      }
+
+      await this.traverse(root, async (node) => {
+        cleanUp(node);
+        await setIdAttrs(node);
+      });
+
+      const clonedRoot = structuredClone(root);
+      roots.push(clonedRoot);
+      await this.traverse(root, (node) => {
+        delete node.css;
+      });
     }
 
     // stop recording requests
-    Network.on("responseReceived", (param) => {});
+    // @ts-ignore TODO: fix typing upstream
+    removeResponseReceived();
 
     // wait until all finish
     while (loadingRequestIds.size > 0) {
@@ -491,7 +663,94 @@ export class Crawler extends EventEmitter {
       // TODO: progress
     }
 
-    await this.prepareCSSAttributes(root as any, DOM, screens);
+    /*
+    for (const root of roots) {
+      console.log(root.css);
+    }
+    */
+    const cdpRoot = this.mergeTrees(roots);
+    /*
+    console.log(cdpRoot.css);
+    */
+
+    await this.traverse(
+      cdpRoot,
+      (node) => {
+        this.mergeStyles(node, this.screens);
+      },
+      true,
+    );
+
+    function toJSDOM(cdpRoot: Node) {
+      const dom = new JSDOM("<html><body></body></html>");
+      const document: Document = dom.window.document;
+
+      function buildNode(cdpNode: Node, document: Document): HTMLElement {
+        let node;
+
+        switch (cdpNode.nodeType) {
+          case CDPNodeType.ELEMENT_NODE:
+            // iframe is safe because no children (not setting pierce)
+            node = document.createElement(cdpNode.nodeName.toLowerCase());
+
+            if (Array.isArray(cdpNode.attributes)) {
+              for (let i = 0; i < cdpNode.attributes.length; i += 2) {
+                node.setAttribute(
+                  cdpNode.attributes[i],
+                  cdpNode.attributes[i + 1],
+                );
+              }
+            }
+            break;
+
+          case CDPNodeType.TEXT_NODE:
+            node = document.createTextNode(cdpNode.nodeValue || "");
+            break;
+
+          case CDPNodeType.COMMENT_NODE:
+            node = document.createComment(cdpNode.nodeValue || "");
+            break;
+
+          case CDPNodeType.DOCUMENT_NODE:
+            node = document.createElement(cdpNode.nodeName.toLowerCase());
+            if (Array.isArray(cdpNode.attributes)) {
+              for (let i = 0; i < cdpNode.attributes.length; i += 2) {
+                node.setAttribute(
+                  cdpNode.attributes[i],
+                  cdpNode.attributes[i + 1],
+                );
+              }
+            }
+            return;
+
+          case CDPNodeType.DOCUMENT_TYPE_NODE: // DOCUMENT_TYPE_NODE
+            return null;
+
+          default:
+            console.warn("Unsupported node type:", cdpNode.nodeType, cdpNode);
+            return null;
+        }
+
+        // Recursively add children
+        if (cdpNode.children) {
+          for (const child of cdpNode.children) {
+            const childNode = buildNode(child, document);
+            if (childNode) node.appendChild(childNode);
+          }
+        }
+
+        return node;
+      }
+
+      const jsdomRoot = buildNode(cdpRoot, document);
+      const htmlNode = document.querySelector("html");
+      htmlNode.replaceChild(jsdomRoot, htmlNode.querySelector("body"));
+      return dom;
+    }
+
+    const dom = toJSDOM(cdpRoot);
+    this.cleanTags(dom.window.document);
+    this.inlineStyle(dom.window.document);
 
     const { result: resultFonts } = await Runtime.evaluate({
       expression:
@@ -503,13 +762,6 @@ export class Crawler extends EventEmitter {
       this.fontCSSSet.add(cssText);
     });
 
-    await Runtime.evaluate({
-      expression:
-        cleanTags.toString() +
-        "; cleanTags();" +
-        inlineStyle.toString() +
-        "; inlineStyle();",
-    });
     const pagePath = getPath(pageURL);
     // for fs path, decode URI components
     const pagePathDecoded = decodeURIComponent(pagePath);
@@ -538,9 +790,7 @@ export class Crawler extends EventEmitter {
         normalizeSameSiteHref.toString() +
         `; normalizeSameSiteHref(${JSON.stringify(origin)});`,
     });
-    const { outerHTML: rawHtml } = await DOM.getOuterHTML({
-      nodeId: root.nodeId,
-    });
+    const rawHtml = dom.window.document.querySelector("body").outerHTML;
     const fontLinkTag = '<link rel="stylesheet" href="/fonts.css" />\n';
     let outerHTML = rewriteResourceLinks(pageBase, resources, rawHtml);
     outerHTML = fontLinkTag + outerHTML;
@@ -551,7 +801,7 @@ export class Crawler extends EventEmitter {
     await client.close();
   }
 
-  private buildScreens() {
+  private buildScreens(): { width: number; height: number; mobile: boolean }[] {
     return this.cfg.deviceWidths.map((width, i) => {
       return {
         width,
@@ -591,140 +841,211 @@ export class Crawler extends EventEmitter {
     }
   }
 
-  private async prepareCSSAttributes(root: Node, DOM: DOMApi, screens: any[]) {
-    function cleanUp(node: Node) {
-      for (const rulesObj of Object.values(node.css || {})) {
-        for (const [selector, rules] of Object.entries(rulesObj)) {
-          for (const [prop, value] of Object.entries(rules)) {
-            if (!value.explicit) {
-              delete rules[prop];
-            } else {
-              delete value.explicit;
-            }
-          }
-        }
-      }
-    }
-    async function setId(node: Node) {
-      let id = `node-${(node as any).nodeId}`;
-      let hasId = false;
-      const { attributes } = await DOM.getAttributes({
-        nodeId: (node as any).nodeId,
-      });
-      for (let i = 0; i < attributes.length; i += 2) {
-        if (attributes[i] === "id") {
-          id = attributes[i + 1];
-          hasId = true;
-          break;
-        }
-      }
-      if (!hasId)
-        await DOM.setAttributeValue({
-          nodeId: (node as any).nodeId,
-          name: "id",
-          value: id,
-        });
-      (node as any).id = id;
-      for (const rulesObj of Object.values(node.css || {})) {
-        for (const [selector, rules] of Object.entries(rulesObj)) {
-          (rulesObj as any)[`#${id}` + selector] = rules;
-          delete (rulesObj as any)[selector];
-        }
-      }
-    }
-    await this.traverse(
-      root,
-      async (node) => {
-        if (!node.css) return;
-        cleanUp(node);
-        await setId(node);
-        const styleJSONs: any = {};
-        Object.entries(node.css || {}).forEach(([screenKey, rules]) => {
-          styleJSONs[screenKey] = toStyleJSON(
-            replaceVariables(toStyleSheet(rules as any)),
+  private mergeStyles(
+    node: Node,
+    screens: { width: number; height: number; mobile: boolean }[],
+  ) {
+    const styleJSONs: any = {};
+    Object.entries(node.css || {}).forEach(([screenKey, rules]) => {
+      styleJSONs[screenKey] = toStyleJSON(
+        replaceVariables(toStyleSheet(rules as any)),
+      );
+    });
+    const sharedCSS: any = {};
+    const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
+    if (firstStyleJSON) {
+      for (const [targetSelector, targetRule] of Object.entries(
+        firstStyleJSON as any,
+      )) {
+        for (const [targetProp, targetValue] of Object.entries(
+          targetRule as any,
+        )) {
+          const isShared = otherStyleJSONs.every(
+            (styleJSON: any) =>
+              styleJSON[targetSelector] &&
+              JSON.stringify(styleJSON[targetSelector][targetProp]) ===
+                JSON.stringify(targetValue),
           );
-        });
-        const sharedCSS: any = {};
-        const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
-        if (firstStyleJSON) {
-          for (const [targetSelector, targetRule] of Object.entries(
-            firstStyleJSON as any,
-          )) {
-            for (const [targetProp, targetValue] of Object.entries(
-              targetRule as any,
-            )) {
-              const isShared = otherStyleJSONs.every(
-                (styleJSON: any) =>
-                  styleJSON[targetSelector] &&
-                  JSON.stringify(styleJSON[targetSelector][targetProp]) ===
-                    JSON.stringify(targetValue),
-              );
-              if (isShared) {
-                if (!sharedCSS[targetSelector]) sharedCSS[targetSelector] = {};
-                sharedCSS[targetSelector][targetProp] = targetValue;
-                Object.values(styleJSONs).forEach((styleJSON: any) => {
-                  if (styleJSON[targetSelector])
-                    delete styleJSON[targetSelector][targetProp];
-                });
-              }
-            }
-            for (const screenKey of Object.keys(styleJSONs)) {
-              const styleKeyJSON = styleJSONs[screenKey];
-              for (const selector of Object.keys(styleKeyJSON))
-                if (Object.keys(styleKeyJSON[selector]).length === 0)
-                  delete styleKeyJSON[selector];
-              if (Object.keys(styleJSONs[screenKey]).length === 0)
-                delete styleJSONs[screenKey];
-            }
+          if (isShared) {
+            if (!sharedCSS[targetSelector]) sharedCSS[targetSelector] = {};
+            sharedCSS[targetSelector][targetProp] = targetValue;
+            Object.values(styleJSONs).forEach((styleJSON: any) => {
+              if (styleJSON[targetSelector])
+                delete styleJSON[targetSelector][targetProp];
+            });
           }
         }
-        let cssType = "styleSheet";
-        let cssData: any;
-        if (
-          Object.keys(styleJSONs).length === 0 &&
-          Object.keys(sharedCSS).length === 0
-        )
-          return;
-        else if (
-          Object.keys(styleJSONs).length === 0 &&
-          Object.keys(sharedCSS).length === 1 &&
-          Object.keys(sharedCSS)[0] === `#${(node as any).id}`
-        ) {
-          cssType = "inlineStyle";
-          cssData = sharedCSS[`#${(node as any).id}`];
-        } else {
-          cssData = "";
-          if (Object.keys(sharedCSS).length > 0)
-            cssData += toStyleSheet(sharedCSS);
-          for (const key of Object.keys(styleJSONs)) {
-            const i = parseInt(key);
-            if (i === 0)
-              cssData += toStyleSheet(
-                styleJSONs[i],
-                null,
-                this.cfg.breakpoints[i],
-              );
-            else if (i === screens.length - 1)
-              cssData += toStyleSheet(
-                styleJSONs[i],
-                this.cfg.breakpoints[i - 1],
-                null,
-              );
-            else
-              cssData += toStyleSheet(
-                styleJSONs[i],
-                this.cfg.breakpoints[i - 1],
-                this.cfg.breakpoints[i],
-              );
-          }
+        for (const screenKey of Object.keys(styleJSONs)) {
+          const styleKeyJSON = styleJSONs[screenKey];
+          for (const selector of Object.keys(styleKeyJSON))
+            if (Object.keys(styleKeyJSON[selector]).length === 0)
+              delete styleKeyJSON[selector];
+          if (Object.keys(styleJSONs[screenKey]).length === 0)
+            delete styleJSONs[screenKey];
         }
-        await DOM.setAttributeValue({
-          nodeId: (node as any).nodeId,
-          name: "data-css",
-          value: JSON.stringify({ type: cssType, data: cssData }),
-        });
-      },
-      false,
+      }
+    }
+    let cssType = "styleSheet";
+    let cssData: any;
+    if (
+      Object.keys(styleJSONs).length === 0 &&
+      Object.keys(sharedCSS).length === 0
+    )
+      return;
+    else if (
+      Object.keys(styleJSONs).length === 0 &&
+      Object.keys(sharedCSS).length === 1 &&
+      Object.keys(sharedCSS)[0] === `#${(node as any).id}`
+    ) {
+      cssType = "inlineStyle";
+      cssData = sharedCSS[`#${(node as any).id}`];
+    } else {
+      cssData = "";
+      if (Object.keys(sharedCSS).length > 0) cssData += toStyleSheet(sharedCSS);
+      for (const key of Object.keys(styleJSONs)) {
+        const i = parseInt(key);
+        if (i === 0)
+          cssData += toStyleSheet(styleJSONs[i], null, this.cfg.breakpoints[i]);
+        else if (i === screens.length - 1)
+          cssData += toStyleSheet(
+            styleJSONs[i],
+            this.cfg.breakpoints[i - 1],
+            null,
+          );
+        else
+          cssData += toStyleSheet(
+            styleJSONs[i],
+            this.cfg.breakpoints[i - 1],
+            this.cfg.breakpoints[i],
+          );
+      }
+    }
+    node.attributes.push(
+      "data-css",
+      JSON.stringify({ type: cssType, data: cssData }),
     );
+  }
+
+  private mergeTrees(roots: Node[]): Node {
+    const mergedRoot = roots[0];
+    // merge css, filling missing with display: none
+    if (mergedRoot.nodeType === CDPNodeType.ELEMENT_NODE) {
+      mergedRoot.css = roots.reduce((acc, root) => {
+        acc = { ...acc, ...root.css };
+        return acc;
+      }, {});
+      for (var i = 0; i < this.screens.length; ++i) {
+        if (!mergedRoot.css[i]) {
+          mergedRoot.css[i] = {};
+          mergedRoot.css[i][`#${mergedRoot.id}`] = {
+            display: { value: "none" },
+          };
+        }
+      }
+    }
+
+    if (roots.length === 1) {
+      // assume children inherits the display: none
+      // can break if children have some CSS overriding
+      return mergedRoot;
+    }
+
+    const nodeMap = new Map<number, Node[]>();
+
+    for (const root of roots) {
+      if (root.children) {
+        for (const child of root.children) {
+          if (!nodeMap.has(child.nodeId)) {
+            nodeMap.set(child.nodeId, [child]);
+          } else {
+            nodeMap.get(child.nodeId).push(child);
+          }
+        }
+      }
+    }
+
+    mergedRoot.children = [];
+    for (const nodes of nodeMap.values()) {
+      mergedRoot.children.push(this.mergeTrees(nodes));
+    }
+    return mergedRoot;
+  }
+
+  private inlineStyle(document: Document) {
+    const body = document.querySelector("body");
+    const elements = [...body.querySelectorAll("*")];
+    elements.push(body);
+    for (const el of elements) {
+      const dataCSSJSON = el.getAttribute("data-css");
+      if (dataCSSJSON) {
+        const { type, data } = JSON.parse(dataCSSJSON);
+        if (type === "styleSheet") {
+          const styleEl = document.createElement("style");
+          styleEl.textContent = data;
+          const noChildTags = [
+            // void elements
+            // https://developer.mozilla.org/en-US/docs/Glossary/Void_element
+            "AREA",
+            "BASE",
+            "BR",
+            "COL",
+            "EMBED",
+            "HR",
+            "IMG",
+            "INPUT",
+            "LINK",
+            "META",
+            "PARAM",
+            "SOURCE",
+            "TRACK",
+            "WBR",
+            // some others
+            "TEXTAREA",
+            "IFRAME",
+            "TITLE",
+            "SCRIPT",
+            "STYLE",
+          ];
+          if (noChildTags.includes(el.tagName)) {
+            el.parentNode.insertBefore(styleEl, el);
+          } else {
+            el.insertBefore(styleEl, el.children[0]);
+          }
+        } else {
+          // inlineStyle
+          //el.style.cssText = "";
+          Object.entries(data).forEach(([key, value]) => {
+            el.style.setProperty(
+              key,
+              value.value,
+              value.important ? "important" : "",
+            );
+          });
+        }
+
+        // cleanup attrs
+        [...el.attributes].forEach((attr) => {
+          if (
+            /*
+          attr.name !== "id" &&
+          attr.name !== "class" &&
+          attr.name !== "style" &&
+          attr.name !== "href" &&
+          attr.name !== "value" &&
+          attr.name !== "type" &&
+          //attr.name !== "data-pseudo" &&
+          !attr.name.includes("src")
+          */
+            attr.name === "data-css"
+          ) {
+            el.removeAttribute(attr.name);
+          }
+        });
+      }
+    }
+  }
+  private cleanTags(document: Document) {
+    const toClean = document.querySelectorAll("script, link, style");
+    toClean.forEach((el) => el.remove());
   }
 }

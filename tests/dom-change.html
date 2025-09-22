@@ -1,0 +1,26 @@
+<script>
+  function updateBody() {
+    const body = document.body;
+    let div = document.getElementById("width-indicator");
+    if (window.innerWidth > 1000) {
+      if (!div) {
+        div = document.createElement("div");
+        div.id = "width-indicator";
+        const p = document.createElement("p");
+        p.textContent = "width>1000";
+        div.appendChild(p);
+        body.appendChild(div);
+      }
+    } else {
+      if (div) {
+        body.removeChild(div);
+      }
+    }
+  }
+
+  window.addEventListener("resize", updateBody);
+  window.addEventListener("DOMContentLoaded", updateBody);
+</script>
+<body>
+  <div>dummy</div>
+</body>
