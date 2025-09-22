@@ -562,15 +562,27 @@ export class Crawler extends EventEmitter {
     parallel = false,
   ) {
     if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return; // element
-    await callback(node);
-    if (node.children) {
-      if (parallel)
-        await Promise.all(
-          node.children.map((c) => this.traverse(c as any, callback, parallel)),
-        );
-      else
-        for (const c of node.children)
-          await this.traverse(c as any, callback, parallel);
+    try {
+      await callback(node);
+
+      if (node.children) {
+        if (parallel)
+          await Promise.all(
+            node.children.map((c) =>
+              this.traverse(c as any, callback, parallel),
+            ),
+          );
+        else
+          for (const c of node.children)
+            await this.traverse(c as any, callback, parallel);
+      }
+    } catch (e) {
+      this.emitProgress({
+        message: {
+          level: "error",
+          text: `${callback.name}: ${e.message}`,
+        },
+      });
     }
   }
 
