@@ -19,6 +19,10 @@ export type Node = Omit<Protocol.DOM.Node, "children"> & {
 
 export type CSSApi = ProtocolProxyApi.CSSApi;
 export type DOMApi = ProtocolProxyApi.DOMApi;
+export type OverlayApi = ProtocolProxyApi.OverlayApi;
+export type RuntimeApi = ProtocolProxyApi.RuntimeApi;
+
+export type HighlightConfig = Protocol.Overlay.HighlightConfig;
 
 export enum CDPNodeType {
   ELEMENT_NODE = 1,

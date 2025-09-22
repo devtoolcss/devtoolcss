@@ -135,6 +135,16 @@ export function argsToConfig(): CrawlConfig {
       default: 1000,
       desc: "Delay ms after navigation before processing",
     })
+    .option("browser-flags", {
+      type: "string",
+      default: "",
+      desc: "Additional flags to pass to browser, e.g. '--no-sandbox'",
+    })
+    .option("debug", {
+      type: "boolean",
+      default: false,
+      desc: "Show highlighting and extra messages",
+    })
     .help()
     .parseSync();
 
@@ -173,5 +183,7 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     browserScan: argv["browser-scan"],
     maxPages: argv["max-pages"],
     delayAfterNavigateMs: argv["delay-after-nav"],
+    browserFlags: argv["browser-flags"],
+    debug: argv["debug"],
   };
 }

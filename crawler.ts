@@ -20,6 +20,7 @@ import {
   normalizeSameSiteHref,
 } from "./runtime.js";
 import { cascade, cascadePseudoClass } from "./cascade.js";
+import { highlightNode } from "./highlight.js";
 import {
   getPath,
   getOrigin,
@@ -41,6 +42,8 @@ export interface CrawlConfig {
   browserScan: boolean;
   maxPages?: number;
   delayAfterNavigateMs: number;
+  browserFlags: string;
+  debug: boolean;
 }
 
 export enum CrawlStages {
@@ -91,6 +94,7 @@ export class Crawler extends EventEmitter {
   private assetDir = "";
   private fontCSSPath = "";
   private screens: { width: number; height: number; mobile: boolean }[] = [];
+  private toHighlight = false;
 
   constructor(cfg: CrawlConfig) {
     super();
@@ -98,6 +102,7 @@ export class Crawler extends EventEmitter {
     this.assetDir = path.join(this.cfg.outDir, "assets");
     this.fontCSSPath = path.join(this.cfg.outDir, "fonts.css");
     this.screens = this.buildScreens();
+    this.toHighlight = this.cfg.debug && !this.cfg.headless;
   }
 
   async start(): Promise<CrawlSummary> {
@@ -176,9 +181,9 @@ export class Crawler extends EventEmitter {
   }
 
   private async launchBrowser() {
-    const { browserPath, headless } = this.cfg;
+    const { browserPath, headless, browserFlags } = this.cfg;
     const headlessFlag = headless ? "--headless" : "";
-    const browserCmd = `${browserPath} ${headlessFlag} --remote-debugging-port=9222`;
+    const browserCmd = `${browserPath} --remote-debugging-port=9222 ${headlessFlag} ${browserFlags}`;
     this.browserProc = exec(browserCmd);
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -310,7 +315,7 @@ export class Crawler extends EventEmitter {
 
     const target = await CDP.New();
     const client = await CDP({ target: target.id });
-    const { DOM, CSS, Page, Runtime, Network, Emulation } = client;
+    const { DOM, CSS, Page, Runtime, Network, Emulation, Overlay } = client;
 
     const requests: {
       [requestId: string]: {
@@ -393,6 +398,8 @@ export class Crawler extends EventEmitter {
     await CSS.enable();
     await Page.enable();
     await Network.enable();
+    if (!this.cfg.headless) await Overlay.enable();
+    // Runtime no need to enable if not using events
 
     const navResult = await Page.navigate({ url: pageURL });
     if (navResult.errorText)
@@ -460,7 +467,7 @@ export class Crawler extends EventEmitter {
         nodeId: node.nodeId,
         depth: -1,
       });
-    await childrenPromise;
+      await childrenPromise;
     }
 
     await getChildren(docRoot);
@@ -555,6 +562,9 @@ export class Crawler extends EventEmitter {
     }
 
     const roots = [];
+    this.emitProgress({
+      phase: "crawling",
+    });
     for (let i = 0; i < this.screens.length; i++) {
       const { width, height, mobile } = this.screens[i];
       await Emulation.setDeviceMetricsOverride({
@@ -590,18 +600,24 @@ export class Crawler extends EventEmitter {
       await this.traverse(
         root,
         async (node) => {
+          if (this.toHighlight) {
+            await highlightNode(node, DOM, Runtime, Overlay);
+          }
           await cascade(node, CSS, i);
           processed += 1;
           this.emitProgress({
-            phase: "crawling",
             crawlProgress: {
               stageIndex: CrawlStages.Cascade,
               totalElements,
               processedElements: processed,
             },
           });
+          if (this.toHighlight) {
+            await new Promise((r) => setTimeout(r, 25));
+            await Overlay.hideHighlight();
+          }
         },
-        true,
+        !this.cfg.debug,
       );
       processed = 0;
       await this.traverse(
@@ -610,7 +626,6 @@ export class Crawler extends EventEmitter {
           await cascadePseudoClass(node, CSS, i);
           processed += 1;
           this.emitProgress({
-            phase: "crawling",
             crawlProgress: {
               stageIndex: CrawlStages.CascadePseudo,
               totalElements,
@@ -685,15 +700,7 @@ export class Crawler extends EventEmitter {
       // TODO: progress
     }
 
-    /*
-    for (const root of roots) {
-      console.log(root.css);
-    }
-    */
     const cdpRoot = this.mergeTrees(roots);
-    /*
-    console.log(cdpRoot.css);
-    */
 
     await this.traverse(
       cdpRoot,
