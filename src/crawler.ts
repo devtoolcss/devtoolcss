@@ -723,7 +723,7 @@ export class Crawler extends EventEmitter {
     );
 
     const toJSDOM = (cdpRoot: Node) => {
-      const dom = new JSDOM("<html><body></body></html>");
+      const dom = new JSDOM("<html><head></head><body></body></html>");
       const document: Document = dom.window.document;
 
       const buildNode = (cdpNode: Node, document: Document): HTMLElement => {
@@ -836,10 +836,15 @@ export class Crawler extends EventEmitter {
         normalizeSameSiteHref.toString() +
         `; normalizeSameSiteHref(${JSON.stringify(origin)});`,
     });
-    const rawHtml = dom.window.document.querySelector("body").outerHTML;
-    const fontLinkTag = '<link rel="stylesheet" href="/fonts.css" />\n';
-    let outerHTML = rewriteResourceLinks(pageBase, resources, rawHtml);
-    outerHTML = fontLinkTag + outerHTML;
+    // Insert the font link tag as the first child of <head>
+    const fontLink = dom.window.document.createElement("link");
+    fontLink.rel = "stylesheet";
+    fontLink.href = "/fonts.css";
+    const head = dom.window.document.querySelector("head");
+    head.insertBefore(fontLink, head.firstChild);
+    const rawHtml = dom.window.document.documentElement.outerHTML;
+    let outerHTML =
+      "<!DOCTYPE html>\n" + rewriteResourceLinks(pageBase, resources, rawHtml);
     fs.mkdirSync(htmlDir, { recursive: true });
     fs.writeFileSync(htmlPath, outerHTML, "utf-8");
 
