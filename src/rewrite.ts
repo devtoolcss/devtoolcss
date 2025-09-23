@@ -2,6 +2,16 @@ import escapeHTML from "escape-html";
 import escapeStringRegexp from "escape-string-regexp";
 import path from "path";
 
+const urlCharSet = `[\\w\\/.~%:@&+$,!*-]?#`; // ='()\\[\\]; not included because can be boundary
+
+function urlRegex(url: string, html: boolean, prefixRegexStr = "") {
+  const content = html ? escapeHTML(url) : url;
+  return new RegExp(
+    `(?<!${urlCharSet})${prefixRegexStr}${escapeStringRegexp(content)}(?!${urlCharSet})`,
+    "g",
+  );
+}
+
 export function rewriteResourceLinks(base, resources, outerHTML) {
   // base decoded, no trailing '/' EXCEPT root /
   for (const { url, path: filePath } of resources) {
@@ -20,22 +30,8 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
     for (const target of [url, urlDecoded]) {
       outerHTML = outerHTML;
       outerHTML = outerHTML
-        .replace(
-          new RegExp(
-            `(?<![\\w\\/])${escapeStringRegexp(
-              escapeHTML(target),
-            )}(?![\\w\\/])`,
-            "g",
-          ),
-          pathEscaped,
-        )
-        .replace(
-          new RegExp(
-            `(?<![\\w\\/])${escapeStringRegexp(target)}(?![\\w\\/])`,
-            "g",
-          ),
-          filePath,
-        );
+        .replace(urlRegex(target, true), pathEscaped)
+        .replace(urlRegex(target, false), filePath);
       /*
         .replace(
           new RegExp(
@@ -78,26 +74,11 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
     // replace path-only uri
     // ./ or / or without are the same, all base origin
     const relPathUriDecoded = decodeURI(relPathUri);
+    const prefixRegexStr = `(\\.\\/|${base === "/" ? "" : base}\\/)?`;
     for (const target of [relPathUri, relPathUriDecoded]) {
       outerHTML = outerHTML
-        .replace(
-          new RegExp(
-            `(?<![\\w\\/])(\\.\\/|${base === "/" ? "" : base}\\/)?${escapeStringRegexp(
-              escapeHTML(target),
-            )}(?![\\w\\/])`,
-            "g",
-          ),
-          pathEscaped,
-        )
-        .replace(
-          new RegExp(
-            `(?<![\\w\\/])(\\.\\/|${base === "/" ? "" : base}\\/)?${escapeStringRegexp(
-              target,
-            )}(?![\\w\\/])`,
-            "g",
-          ),
-          filePath,
-        );
+        .replace(urlRegex(target, true, prefixRegexStr), pathEscaped)
+        .replace(urlRegex(target, false, prefixRegexStr), filePath);
       /*
         .replace(
           new RegExp(
