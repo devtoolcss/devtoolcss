@@ -1093,7 +1093,8 @@ export class Crawler extends EventEmitter {
           //attr.name !== "data-pseudo" &&
           !attr.name.includes("src")
           */
-            attr.name === "data-css"
+            attr.name === "data-css" &&
+            !this.cfg.debug
           ) {
             el.removeAttribute(attr.name);
           }
