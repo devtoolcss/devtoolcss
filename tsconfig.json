@@ -11,9 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
     "rootDir": ".",
-    "allowJs": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "jsx": "react-jsx"
   },
-  "include": ["*.ts", "**/*.ts"],
-  "exclude": ["node_modules", "dist", "__out", "_out"]
+  "include": ["*.ts", "**/*.ts", "*.tsx", "**/*.tsx"],
+  "exclude": ["node_modules", "tmp", "dist"]
 }

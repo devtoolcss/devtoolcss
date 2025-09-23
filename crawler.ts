@@ -1012,7 +1012,13 @@ export class Crawler extends EventEmitter {
     for (const el of elements) {
       const dataCSSJSON = el.getAttribute("data-css");
       if (dataCSSJSON) {
-        const { type, data } = JSON.parse(dataCSSJSON);
+        const dataCSS = JSON.parse(dataCSSJSON) as
+          | { type: "styleSheet"; data: string }
+          | {
+              type: "inlineStyle";
+              data: Record<string, { value: string; important?: boolean }>;
+            };
+        const { type, data } = dataCSS;
         if (type === "styleSheet") {
           const styleEl = document.createElement("style");
           styleEl.textContent = data;
@@ -1049,7 +1055,7 @@ export class Crawler extends EventEmitter {
           // inlineStyle
           //el.style.cssText = "";
           Object.entries(data).forEach(([key, value]) => {
-            el.style.setProperty(
+            (el as HTMLElement).style.setProperty(
               key,
               value.value,
               value.important ? "important" : "",
