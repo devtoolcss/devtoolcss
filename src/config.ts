@@ -172,7 +172,10 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     url: argv.url,
     outDir: argv["out-dir"],
     browserPath: browserPath,
-    headless: argv["disable-headless"] ?? !argv["debug"],
+    headless:
+      argv["disable-headless"] === undefined
+        ? !argv["debug"]
+        : !argv["disable-headless"],
     screenHeight: argv["screen-height"],
     breakpoints,
     deviceWidths,
