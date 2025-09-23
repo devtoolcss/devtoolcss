@@ -91,7 +91,6 @@ export function argsToConfig(): CrawlConfig {
     })
     .option("disable-headless", {
       type: "boolean",
-      default: false,
       desc: "Run browser with headful mode",
     })
     .option("device-widths", {
@@ -174,7 +173,7 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     url: argv.url,
     outDir: argv["out-dir"],
     browserPath: browserPath,
-    headless: !argv["disable-headless"],
+    headless: argv["disable-headless"] ?? !argv["debug"],
     screenHeight: argv["screen-height"],
     breakpoints,
     deviceWidths,
