@@ -78,7 +78,7 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       });
     const handleSig = () => {
       crawler.stop();
-      process.exit(0);
+      process.exit(1);
     };
     process.on("SIGINT", handleSig);
     process.on("SIGTERM", handleSig);
