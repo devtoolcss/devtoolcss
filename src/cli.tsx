@@ -74,7 +74,8 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
         }, 200); // allow last frame render
       })
       .catch((e: any) => {
-        setPhase("error");
+        setPhase("error"); // TODO handle error phase
+        process.exit(1);
       });
     const handleSig = () => {
       crawler.stop();
