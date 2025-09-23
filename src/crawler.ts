@@ -669,6 +669,11 @@ export class Crawler extends EventEmitter {
         for (let i = 0; i < node.attributes.length; i += 2) {
           if (node.attributes[i] === "id") {
             id = node.attributes[i + 1];
+            if (id.includes(":")) {
+              // can break selector
+              id = id.replace(/:/g, "-");
+              node.attributes[i + 1] = id;
+            }
             hasId = true;
             break;
           }
