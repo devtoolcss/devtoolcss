@@ -1037,6 +1037,9 @@ export class Crawler extends EventEmitter {
             };
         const { type, data } = dataCSS;
         if (type === "styleSheet") {
+          // inline style can contain variables and override resolved stylesheet
+          (el as HTMLElement).style.cssText = "";
+
           const styleEl = document.createElement("style");
           styleEl.textContent = data;
           const noChildTags = [
