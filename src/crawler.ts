@@ -616,8 +616,7 @@ export class Crawler extends EventEmitter {
             },
           });
           if (this.toHighlight) {
-            await new Promise((r) => setTimeout(r, 25));
-            await Overlay.hideHighlight();
+            setTimeout(() => Overlay.hideHighlight(), 25);
           }
         },
         !this.cfg.debug,
