@@ -1082,9 +1082,15 @@ export class Crawler extends EventEmitter {
 
           // JSDOM's cssstyle doesn't handle gap.
           // TODO: fix upstream
-          if (data["grid-gap"]) {
-            data["gap"] = data["grid-gap"];
-            delete data["grid-gap"];
+          for (const { legacyProp, newProp } of [
+            { legacyProp: "grid-gap", newProp: "gap" },
+            { legacyProp: "grid-row-gap", newProp: "row-gap" },
+            { legacyProp: "grid-column-gap", newProp: "column-gap" },
+          ]) {
+            if (data[legacyProp] && !data[newProp]) {
+              data[newProp] = data[legacyProp];
+              delete data[legacyProp];
+            }
           }
           Object.entries(data).forEach(([key, value]) => {
             (el as HTMLElement).style.setProperty(
