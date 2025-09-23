@@ -138,7 +138,7 @@ export function argsToConfig(): CrawlConfig {
     .option("browser-flags", {
       type: "string",
       default: "",
-      desc: "Additional flags to pass to browser, e.g. '--no-sandbox'",
+      desc: "Additional flags to pass to browser, e.g. '--incognito'",
     })
     .option("debug", {
       type: "boolean",

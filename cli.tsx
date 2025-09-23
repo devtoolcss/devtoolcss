@@ -42,6 +42,9 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       if (p.phase) setPhase(p.phase);
       if (p.message) {
         switch (p.message.level) {
+          case "debug":
+            if (cfg.debug) console.debug(p.message.text);
+            break;
           case "warning":
             console.log(chalk.yellow(p.message.text));
             break;

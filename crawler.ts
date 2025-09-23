@@ -74,7 +74,7 @@ export interface ScanProgress {
 
 export interface Progress {
   phase?: "scanning" | "crawling";
-  message?: { level: "info" | "warning" | "error"; text: string };
+  message?: { level: "debug" | "info" | "warning" | "error"; text: string };
   scanProgress?: Partial<ScanProgress>;
   crawlProgress?: Partial<CrawlProgress>;
 }
@@ -184,6 +184,9 @@ export class Crawler extends EventEmitter {
     const { browserPath, headless, browserFlags } = this.cfg;
     const headlessFlag = headless ? "--headless" : "";
     const browserCmd = `${browserPath} --remote-debugging-port=9222 ${headlessFlag} ${browserFlags}`;
+    this.emitProgress({
+      message: { level: "info", text: `Launching browser: ${browserCmd}` },
+    });
     this.browserProc = exec(browserCmd);
     await new Promise((r) => setTimeout(r, 1500));
   }
