@@ -626,6 +626,9 @@ export class Crawler extends EventEmitter {
       await this.traverse(
         root,
         async (node) => {
+          if (this.toHighlight) {
+            await highlightNode(node, DOM, Runtime, Overlay, false);
+          }
           await cascadePseudoClass(node, CSS, i);
           processed += 1;
           this.emitProgress({

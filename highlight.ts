@@ -206,6 +206,7 @@ export async function highlightNode(
   DOM: DOMApi,
   Runtime: RuntimeApi,
   Overlay: OverlayApi,
+  showOverlay: boolean = true,
 ): Promise<void> {
   const { object } = await DOM.resolveNode({ nodeId: node.nodeId });
   const objectId = object.objectId;
@@ -217,6 +218,6 @@ export async function highlightNode(
       objectId,
       silent: true,
     });
-    await Overlay.highlightNode({ highlightConfig, objectId });
+    if (showOverlay) await Overlay.highlightNode({ highlightConfig, objectId });
   }
 }
