@@ -27,6 +27,7 @@ import {
   normalizePageURL,
   selectPageLinks,
 } from "./url.js";
+import { portInUse } from "./check_port.js";
 import { JSDOM } from "jsdom";
 
 export interface CrawlConfig {
@@ -187,6 +188,10 @@ export class Crawler extends EventEmitter {
     this.emitProgress({
       message: { level: "info", text: `Launching browser: ${browserCmd}` },
     });
+    const portUsed = await portInUse(9222);
+    if (portUsed) {
+      throw Error("Port 9222 already in use, cannot launch browser");
+    }
     this.browserProc = exec(browserCmd);
     await new Promise((r) => setTimeout(r, 1500));
   }
