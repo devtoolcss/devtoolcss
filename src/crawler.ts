@@ -464,7 +464,7 @@ export class Crawler extends EventEmitter {
         setTimeout(() => {
           removeListener();
           resolve();
-        }, 1000);
+        }, 250);
       });
       DOM.requestChildNodes({
         nodeId: node.nodeId,
@@ -627,7 +627,9 @@ export class Crawler extends EventEmitter {
         root,
         async (node) => {
           if (this.toHighlight) {
-            await highlightNode(node, DOM, Runtime, Overlay, false);
+            await highlightNode(node, DOM, Runtime, Overlay, {
+              showOverlay: false,
+            });
           }
           await cascadePseudoClass(node, CSS, i);
           processed += 1;

@@ -10,10 +10,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "noImplicitAny": false,
     "jsx": "react-jsx"
   },
-  "include": ["*.ts", "**/*.ts", "*.tsx", "**/*.tsx"],
-  "exclude": ["node_modules", "tmp", "dist"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": []
 }
