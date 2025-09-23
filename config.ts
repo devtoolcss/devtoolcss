@@ -157,7 +157,6 @@ export function argsToConfig(): CrawlConfig {
     for (const cmd of defaultBrowserCmds) {
       if (isInPath(cmd)) {
         browserPath = cmd;
-        console.log(`Using browser executable: ${cmd}`);
         break;
       }
     }
