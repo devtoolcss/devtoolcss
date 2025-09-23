@@ -1071,6 +1071,13 @@ export class Crawler extends EventEmitter {
         } else {
           // inlineStyle
           //el.style.cssText = "";
+
+          // JSDOM's cssstyle doesn't handle gap.
+          // TODO: fix upstream
+          if (data["grid-gap"]) {
+            data["gap"] = data["grid-gap"];
+            delete data["grid-gap"];
+          }
           Object.entries(data).forEach(([key, value]) => {
             (el as HTMLElement).style.setProperty(
               key,
