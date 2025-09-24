@@ -75,6 +75,7 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       })
       .catch((e: any) => {
         setPhase("error"); // TODO handle error phase
+        console.error(chalk.red("Crawl failed: " + e.message + "\n" + e.stack));
         process.exit(1);
       });
     const handleSig = () => {
