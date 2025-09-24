@@ -148,7 +148,11 @@ export function argsToConfig(): CrawlConfig {
     .option("debug", {
       type: "boolean",
       default: false,
-      desc: "Show highlighting and extra messages",
+      desc: "Debug log and --overlay --disable-headless, can be override",
+    })
+    .option("overlay", {
+      type: "boolean",
+      desc: "Show overlay when cascading elements when disable headless",
     })
     .help()
     .parseSync();
@@ -192,5 +196,6 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     delayAfterNavigateMs: argv["delay-after-nav"],
     browserFlags: argv["browser-flag"],
     debug: argv["debug"],
+    overlay: argv["overlay"] === undefined ? argv["debug"] : argv["overlay"],
   };
 }

@@ -45,6 +45,7 @@ export interface CrawlConfig {
   delayAfterNavigateMs: number;
   browserFlags: string[];
   debug: boolean;
+  overlay: boolean;
 }
 
 export enum CrawlStages {
@@ -103,7 +104,7 @@ export class Crawler extends EventEmitter {
     this.assetDir = path.join(this.cfg.outDir, "assets");
     this.fontCSSPath = path.join(this.cfg.outDir, "fonts.css");
     this.screens = this.buildScreens();
-    this.toHighlight = this.cfg.debug && !this.cfg.headless;
+    this.toHighlight = this.cfg.overlay && !this.cfg.headless;
   }
 
   async start(): Promise<CrawlSummary> {
@@ -676,7 +677,7 @@ export class Crawler extends EventEmitter {
             setTimeout(() => Overlay.hideHighlight(), 25);
           }
         },
-        !this.cfg.debug,
+        !this.toHighlight,
       );
       processed = 0;
       await this.traverse(

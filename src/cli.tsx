@@ -177,6 +177,7 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
           <Text color={cfg.recursive ? "" : "gray"}>Recursive</Text>{" "}
           <Text color={cfg.browserScan ? "" : "gray"}>BrowserScan</Text>{" "}
           <Text color={cfg.headless ? "" : "gray"}>Headless</Text>{" "}
+          <Text color={cfg.overlay ? "" : "gray"}>Overlay</Text>{" "}
           <Text color={cfg.debug ? "" : "gray"}>Debug</Text>
         </Text>
       </Box>
