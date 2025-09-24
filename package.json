@@ -31,6 +31,7 @@
     "cli": "tsx cli.tsx",
     "format": "prettier --experimental-cli --write .",
     "build": "tsc",
+    "prepare": "npm run build && chmod +x ./dist/cli.js",
     "type-check": "tsc --noEmit"
   },
   "bin": {
