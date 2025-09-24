@@ -134,10 +134,16 @@ export function argsToConfig(): CrawlConfig {
       default: 1000,
       desc: "Delay ms after navigation before processing",
     })
-    .option("browser-flags", {
+    .option("browser-flag", {
       type: "string",
-      default: "",
-      desc: "Additional flags to pass to browser, e.g. '--incognito'",
+      array: true,
+      default: [],
+      desc:
+        "Additional flags to pass to browser. Can be specified multiple times." +
+        " e.g. --browser-flag='--window-size=x,y' --browser-flag='--no-sandbox'." +
+        " Note that the = is necessary to not misinterpret values as another flag." +
+        " CDP doesn't allow --incognito to persist for new tabs opened.",
+      // https://issues.chromium.org/issues/41363417
     })
     .option("debug", {
       type: "boolean",
@@ -184,7 +190,7 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     browserScan: argv["browser-scan"],
     maxPages: argv["max-pages"],
     delayAfterNavigateMs: argv["delay-after-nav"],
-    browserFlags: argv["browser-flags"],
+    browserFlags: argv["browser-flag"],
     debug: argv["debug"],
   };
 }

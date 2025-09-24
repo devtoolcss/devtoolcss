@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
-import { exec, ChildProcess } from "child_process";
+import { execSync, ChildProcess, spawn } from "child_process";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
 import type { Node, DOMApi } from "./types.js";
 import { CDPNodeType } from "./types.js";
@@ -43,7 +43,7 @@ export interface CrawlConfig {
   browserScan: boolean;
   maxPages?: number;
   delayAfterNavigateMs: number;
-  browserFlags: string;
+  browserFlags: string[];
   debug: boolean;
 }
 
@@ -89,7 +89,7 @@ export interface CrawlSummary {
 
 export class Crawler extends EventEmitter {
   private cfg: CrawlConfig;
-  private browserProc: ChildProcess | null = null;
+  private browserProcess: ChildProcess | null = null;
   private fontCSSSet = new Set<string>();
   private downloadedURLs = new Set<string>();
   private assetDir = "";
@@ -174,7 +174,36 @@ export class Crawler extends EventEmitter {
   }
 
   stop() {
-    if (this.browserProc) this.browserProc.kill();
+    if (this.browserProcess) {
+      // Reference:
+      // https://github.com/puppeteer/puppeteer/blob/b6e14926826129dfdf8e51937f86b1f9b0eaf59e/packages/browsers/src/launch.ts#L433
+      //
+      // basically both puppeteer and playwright do the same
+
+      if (process.platform === "win32") {
+        try {
+          execSync(`taskkill /pid ${this.browserProcess.pid} /T /F`);
+        } catch (error) {
+          // taskkill can fail to kill the process e.g. due to missing permissions.
+          // Let's kill the process via Node API. This delays killing of all child
+          // processes of `this.proc` until the main Node.js process dies.
+          this.browserProcess.kill();
+        }
+      } else {
+        // on linux the process group can be killed with the group id prefixed with
+        // a minus sign. The process group id is the group leader's pid.
+        const processGroupId = -this.browserProcess.pid;
+
+        try {
+          process.kill(processGroupId, "SIGKILL");
+        } catch (error) {
+          // Killing the process group can fail due e.g. to missing permissions.
+          // Let's kill the process via Node API. This delays killing of all child
+          // processes of `this.proc` until the main Node.js process dies.
+          this.browserProcess.kill("SIGKILL");
+        }
+      }
+    }
   }
 
   private emitProgress(p: Progress) {
@@ -183,16 +212,22 @@ export class Crawler extends EventEmitter {
 
   private async launchBrowser() {
     const { browserPath, headless, browserFlags } = this.cfg;
-    const headlessFlag = headless ? "--headless" : "";
-    const browserCmd = `${browserPath} --remote-debugging-port=9222 ${headlessFlag} ${browserFlags}`;
+    const args = ["--remote-debugging-port=9222", ...browserFlags];
+    if (headless) args.push("--headless");
     this.emitProgress({
-      message: { level: "info", text: `Launching browser: ${browserCmd}` },
+      message: {
+        level: "info",
+        text: `Launching browser: ${browserPath} ${args.join(" ")}`,
+      },
     });
     const portUsed = await portInUse(9222);
     if (portUsed) {
       throw Error("Port 9222 already in use, cannot launch browser");
     }
-    this.browserProc = exec(browserCmd);
+    this.browserProcess = spawn(browserPath, args, {
+      stdio: "ignore",
+      detached: true, // to kill as process leader
+    });
     await new Promise((r) => setTimeout(r, 1500));
   }
 
