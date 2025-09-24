@@ -332,9 +332,24 @@ export class Crawler extends EventEmitter {
         mimeType: string;
       };
     } = {};
+    // TODO: can be redirected from multiple urls, but now only keep one
+    const redirectedFrom: { [url: string]: string } = {};
+    function getRedirectedURL(url: string): string {
+      if (!redirectedFrom[url]) return null;
+
+      while (redirectedFrom[url]) {
+        url = redirectedFrom[url];
+      }
+      return url;
+    }
+
     const removeResponseReceived = Network.on("responseReceived", (param) => {
-      const url = param.response.url;
+      const { url, status, headers } = param.response;
       if (url.startsWith("data:")) return;
+      if (status >= 300 && status < 400) {
+        if (headers["location"]) redirectedFrom[headers["location"]] = url;
+        return;
+      }
       const filenamePromise = getFilename(url);
       const mimeType = param.response.mimeType;
       const subtype = mimeType.split("/")[1];
@@ -375,11 +390,15 @@ export class Crawler extends EventEmitter {
             : getAvailableFilename(outDir, filename);
           const outPath = path.join(outDir, outFilename);
           const urlPath = path.join("/assets", type, outFilename);
+          const redirectedURL = getRedirectedURL(url);
           if (!this.downloadedURLs.has(url)) {
             try {
               if (type === "audio" || type === "video") {
                 await downloadFile(url, outPath);
-                resources.push({ url, path: urlPath });
+                resources.push({
+                  url: redirectedURL ? redirectedURL : url,
+                  path: urlPath,
+                });
               } else {
                 if (type === "font") fontFiles.push(filename);
                 const { body, base64Encoded } = await Network.getResponseBody({
@@ -389,13 +408,20 @@ export class Crawler extends EventEmitter {
                   ? Buffer.from(body, "base64")
                   : Buffer.from(body);
                 fs.writeFileSync(outPath, buffer);
-                resources.push({ url, path: urlPath });
+                resources.push({
+                  url: redirectedURL ? redirectedURL : url,
+                  path: urlPath,
+                });
               }
               this.downloadedURLs.add(url);
               downloaded++;
               // TODO: emit progress
             } catch {}
-          } else resources.push({ url, path: urlPath });
+          } else
+            resources.push({
+              url: redirectedURL ? redirectedURL : url,
+              path: urlPath,
+            });
         }
         loadingRequestIds.delete(requestId);
       }
@@ -849,7 +875,8 @@ export class Crawler extends EventEmitter {
     head.insertBefore(fontLink, head.firstChild);
     const rawHtml = dom.window.document.documentElement.outerHTML;
     let outerHTML =
-      "<!DOCTYPE html>\n" + rewriteResourceLinks(pageBase, resources, rawHtml);
+      "<!DOCTYPE html>\n" +
+      rewriteResourceLinks(origin, pageBase, resources, rawHtml);
     fs.mkdirSync(htmlDir, { recursive: true });
     fs.writeFileSync(htmlPath, outerHTML, "utf-8");
 
