@@ -64,20 +64,6 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       }
     };
     crawler.on("progress", onProgress);
-    crawler
-      .start()
-      .then((s: CrawlSummary) => {
-        setSummary(s);
-        setTimeout(() => {
-          exit();
-          process.exit(0);
-        }, 200); // allow last frame render
-      })
-      .catch((e: any) => {
-        setPhase("error"); // TODO handle error phase
-        console.error(chalk.red("Crawl failed: " + e.message + "\n" + e.stack));
-        process.exit(1);
-      });
     const handleSig = () => {
       crawler.stop();
       process.exit(1);
@@ -92,6 +78,20 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
       setPhase("error");
       handleSig();
     });
+    crawler
+      .start()
+      .then((s: CrawlSummary) => {
+        setSummary(s);
+        setTimeout(() => {
+          exit();
+          process.exit(0);
+        }, 200); // allow last frame render
+      })
+      .catch((e: any) => {
+        setPhase("error"); // TODO handle error phase
+        console.error(chalk.red("Crawl failed: " + e.message + "\n" + e.stack));
+        process.exit(1);
+      });
     return () => {
       crawler.stop();
       crawler.removeListener("progress", onProgress);
