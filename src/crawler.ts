@@ -325,6 +325,7 @@ export class Crawler extends EventEmitter {
     const client = await CDP({ target: target.id });
     const { DOM, CSS, Page, Runtime, Network, Emulation, Overlay } = client;
 
+    const originalURL: { [requestId: string]: string } = {};
     const requests: {
       [requestId: string]: {
         url: string;
@@ -332,32 +333,32 @@ export class Crawler extends EventEmitter {
         mimeType: string;
       };
     } = {};
-    // TODO: can be redirected from multiple urls, but now only keep one
-    const redirectedFrom: { [url: string]: string } = {};
-    function getRedirectedURL(url: string): string {
-      if (!redirectedFrom[url]) return null;
 
-      while (redirectedFrom[url]) {
-        url = redirectedFrom[url];
+    // https://chromedevtools.github.io/devtools-protocol/tot/Network/#type-RequestId
+    // > Note that this does not identify individual HTTP requests that are part of a network request.
+    // Redirected request will use the same requestId! So we don't have to trace by ourselves
+    // and responseReceived won't fire on redirect response
+
+    // send is per http request, only record the first
+    Network.on("requestWillBeSent", (param) => {
+      if (!originalURL[param.requestId]) {
+        originalURL[param.requestId] = param.request.url;
       }
-      return url;
-    }
+    });
 
+    // This is the final response of resource, not containing redirect ones
     const removeResponseReceived = Network.on("responseReceived", (param) => {
-      const { url, status, headers } = param.response;
+      const requestId = param.requestId;
+      const url = originalURL[requestId]; // TODO: handle error
       if (url.startsWith("data:")) return;
-      if (status >= 300 && status < 400) {
-        if (headers["location"]) redirectedFrom[headers["location"]] = url;
-        return;
-      }
       const filenamePromise = getFilename(url);
       const mimeType = param.response.mimeType;
       const subtype = mimeType.split("/")[1];
       if (["html", "javascript", "css"].includes(subtype)) return;
-      requests[param.requestId] = {
+      requests[requestId] = {
         url,
-        filenamePromise: filenamePromise,
-        mimeType: mimeType,
+        filenamePromise,
+        mimeType,
       };
     });
 
@@ -371,6 +372,7 @@ export class Crawler extends EventEmitter {
       const { requestId } = param;
       const req = requests[requestId];
       if (req) {
+        // TODO: add at loadingFinished is weird, only ensure audio/video download
         loadingRequestIds.add(requestId);
         const { mimeType, url, filenamePromise } = req;
         const filename = await filenamePromise;
@@ -390,15 +392,11 @@ export class Crawler extends EventEmitter {
             : getAvailableFilename(outDir, filename);
           const outPath = path.join(outDir, outFilename);
           const urlPath = path.join("/assets", type, outFilename);
-          const redirectedURL = getRedirectedURL(url);
           if (!this.downloadedURLs.has(url)) {
             try {
               if (type === "audio" || type === "video") {
                 await downloadFile(url, outPath);
-                resources.push({
-                  url: redirectedURL ? redirectedURL : url,
-                  path: urlPath,
-                });
+                resources.push({ url, path: urlPath });
               } else {
                 if (type === "font") fontFiles.push(filename);
                 const { body, base64Encoded } = await Network.getResponseBody({
@@ -408,20 +406,13 @@ export class Crawler extends EventEmitter {
                   ? Buffer.from(body, "base64")
                   : Buffer.from(body);
                 fs.writeFileSync(outPath, buffer);
-                resources.push({
-                  url: redirectedURL ? redirectedURL : url,
-                  path: urlPath,
-                });
+                resources.push({ url, path: urlPath });
               }
               this.downloadedURLs.add(url);
               downloaded++;
               // TODO: emit progress
             } catch {}
-          } else
-            resources.push({
-              url: redirectedURL ? redirectedURL : url,
-              path: urlPath,
-            });
+          } else resources.push({ url, path: urlPath });
         }
         loadingRequestIds.delete(requestId);
       }
