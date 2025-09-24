@@ -12,7 +12,12 @@ function urlRegex(url: string, html: boolean, prefixRegexStr = "") {
   );
 }
 
-export function rewriteResourceLinks(base, resources, outerHTML) {
+export function rewriteResourceLinks(
+  origin: string,
+  base: string,
+  resources: { url: string; path: string }[],
+  outerHTML: string,
+) {
   // base decoded, no trailing '/' EXCEPT root /
   for (const { url, path: filePath } of resources) {
     const pathEscaped = escapeHTML(filePath);
@@ -33,12 +38,14 @@ export function rewriteResourceLinks(base, resources, outerHTML) {
         .replace(urlRegex(target, false), filePath);
     }
     // replace path-only uri
-    const relPathUriDecoded = decodeURI(relPathUri);
-    const prefixRegexStr = `(\\.\\/|${base === "/" ? "" : base}\\/)?`;
-    for (const target of [relPathUri, relPathUriDecoded]) {
-      outerHTML = outerHTML
-        .replace(urlRegex(target, true, prefixRegexStr), pathEscaped)
-        .replace(urlRegex(target, false, prefixRegexStr), filePath);
+    if (urlObj.origin === origin) {
+      const relPathUriDecoded = decodeURI(relPathUri);
+      const prefixRegexStr = `(\\.\\/|${base === "/" ? "" : base}\\/)?`;
+      for (const target of [relPathUri, relPathUriDecoded]) {
+        outerHTML = outerHTML
+          .replace(urlRegex(target, true, prefixRegexStr), pathEscaped)
+          .replace(urlRegex(target, false, prefixRegexStr), filePath);
+      }
     }
   }
   return outerHTML;
