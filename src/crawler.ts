@@ -630,6 +630,34 @@ export class Crawler extends EventEmitter {
     this.emitProgress({
       phase: "crawling",
     });
+
+    async function setIdAttrs(node: Node) {
+      let id = `node-${node.nodeId}`;
+      let hasId = false;
+      if (!node.attributes) {
+        const { attributes } = await DOM.getAttributes({
+          nodeId: node.nodeId,
+        });
+        node.attributes = attributes;
+      }
+      for (let i = 0; i < node.attributes.length; i += 2) {
+        if (node.attributes[i] === "id") {
+          id = node.attributes[i + 1];
+          if (id.includes(":")) {
+            // can break selector
+            id = id.replace(/:/g, "-");
+            node.attributes[i + 1] = id;
+          }
+          hasId = true;
+          break;
+        }
+      }
+      if (!hasId) {
+        node.attributes.push("id", id);
+      }
+      node.id = id;
+    }
+
     for (let i = 0; i < this.screens.length; i++) {
       const { width, height, mobile } = this.screens[i];
       await Emulation.setDeviceMetricsOverride({
@@ -655,11 +683,16 @@ export class Crawler extends EventEmitter {
       if (!root) throw new Error("No body element found");
 
       let totalElements = 0;
-      const countElements = (node: Node) => {
-        totalElements += 1;
+      const initElements = async (node: Node) => {
+        const { computedStyle } = await CSS.getComputedStyleForNode({
+          nodeId: node.nodeId,
+        });
+        node.computedStyle = computedStyle;
+        await setIdAttrs(node);
         node.css = {};
+        totalElements += 1;
       };
-      await this.traverse(root, countElements, true);
+      await this.traverse(root, initElements, true);
 
       let processed = 0;
       await this.traverse(
@@ -719,42 +752,18 @@ export class Crawler extends EventEmitter {
         }
       }
 
-      async function setIdAttrs(node: Node) {
-        let id = `node-${node.nodeId}`;
-        let hasId = false;
-        if (!node.attributes) {
-          const { attributes } = await DOM.getAttributes({
-            nodeId: node.nodeId,
-          });
-          node.attributes = attributes;
-        }
-        for (let i = 0; i < node.attributes.length; i += 2) {
-          if (node.attributes[i] === "id") {
-            id = node.attributes[i + 1];
-            if (id.includes(":")) {
-              // can break selector
-              id = id.replace(/:/g, "-");
-              node.attributes[i + 1] = id;
-            }
-            hasId = true;
-            break;
-          }
-        }
-        if (!hasId) {
-          node.attributes.push("id", id);
-        }
-        node.id = id;
+      function addIdtoSelector(node: Node) {
         for (const rulesObj of Object.values(node.css || {})) {
           for (const [selector, rules] of Object.entries(rulesObj)) {
-            (rulesObj as any)[`#${id}` + selector] = rules;
-            delete (rulesObj as any)[selector];
+            rulesObj[`#${node.id}` + selector] = rules;
+            delete rulesObj[selector];
           }
         }
       }
 
-      await this.traverse(root, async (node) => {
+      await this.traverse(root, (node) => {
         cleanUp(node);
-        await setIdAttrs(node);
+        addIdtoSelector(node);
       });
 
       const clonedRoot = structuredClone(root);
@@ -882,7 +891,7 @@ export class Crawler extends EventEmitter {
       });
     }
   }
-  private toJSDOM(cdpBody: Node) {
+  private toJSDOM(cdpBody: Node, setNodeId = false) {
     const dom = new JSDOM("<html><head></head><body></body></html>");
     const document = dom.window.document;
 
@@ -901,6 +910,10 @@ export class Crawler extends EventEmitter {
                 cdpNode.attributes[i + 1],
               );
             }
+          }
+          if (setNodeId) {
+            // for selector matching during cascade
+            node.setAttribute("data-nodeId", cdpNode.nodeId);
           }
           break;
 

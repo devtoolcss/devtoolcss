@@ -15,6 +15,7 @@ export type Node = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
   children?: Node[];
   css?: { [key: string]: CSSRules };
+  computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
 
 export type CSSApi = ProtocolProxyApi.CSSApi;
