@@ -8,10 +8,9 @@ import {
 
 import * as CSSwhat from "css-what";
 
-import type { Node, CSSApi, RuleMatch } from "./types.js";
+import type { Node, CSSApi, RuleMatch, CSSRules } from "./types.js";
 
 export async function cascade(node: Node, CSS: CSSApi, screenSize: number) {
-  //BUG: sometimes svg or some div nodeId=0
   const css = { "": {} };
 
   var {
@@ -81,24 +80,54 @@ export async function cascade(node: Node, CSS: CSSApi, screenSize: number) {
       }
     }
   }
-  // normal css always not important
-  /*
-        Object.entries(css).forEach(([key, value]) => {
-          Object.values(value).forEach((prop) => {
-            prop.important = false;
-          });
-        });
-        */
 
   node.css[screenSize] = css;
+}
+
+function iteratePseudo(rules: RuleMatch[], pseudoCss: CSSRules) {
+  for (const rule of rules) {
+    if (rule.rule.origin !== "regular") continue;
+    const matchingSelectors = rule.matchingSelectors.map(
+      (i) => rule.rule.selectorList.selectors[i].text,
+    );
+    for (const selector of matchingSelectors) {
+      const parsedSelector = CSSwhat.parse(selector)[0];
+      if (hasPseudoClass(parsedSelector)) {
+        const suffix = getNormalizedSuffix(parsedSelector);
+        if (!suffix) continue;
+        parseCSSProperties(
+          rule.rule.style.cssProperties,
+          rule.rule.style.cssText,
+          (pseudoCss[suffix] = pseudoCss[suffix] || {}),
+        );
+      }
+    }
+  }
 }
 
 export async function cascadePseudoClass(
   node: Node,
   CSS: CSSApi,
   screenSize: number,
+  checkChildren: boolean,
 ) {
-  const pseudoCss = {};
+  const pseudoCss: CSSRules = {};
+
+  const childRuleSerializedSets = [];
+  if (checkChildren && node.children) {
+    // use for loop to await, forEach will not
+    for (var i = 0; i < node.children.length; ++i) {
+      const child = node.children[i];
+      const { matchedCSSRules } = await CSS.getMatchedStylesForNode({
+        nodeId: child.nodeId,
+      });
+      const s = new Set();
+      for (const ruleMatch of matchedCSSRules) {
+        s.add(JSON.stringify(ruleMatch));
+      }
+      childRuleSerializedSets.push(s);
+    }
+  }
 
   await CSS.forcePseudoState({
     nodeId: node.nodeId,
@@ -109,31 +138,30 @@ export async function cascadePseudoClass(
     nodeId: node.nodeId,
   });
 
-  function iteratePseudo(rules: RuleMatch[]) {
-    for (const rule of rules) {
-      if (rule.rule.origin !== "regular") continue;
-      const matchingSelectors = rule.matchingSelectors.map(
-        (i) => rule.rule.selectorList.selectors[i].text,
-      );
-      for (const selector of matchingSelectors) {
-        const parsedSelector = CSSwhat.parse(selector)[0];
-        if (hasPseudoClass(parsedSelector)) {
-          const suffix = getNormalizedSuffix(parsedSelector);
-          if (!suffix) continue;
+  iteratePseudo(matchedCSSRules, pseudoCss);
+  for (const match of pseudoElements) {
+    if (isEffectivePseudoElem(match, node)) {
+      iteratePseudo(match.matches, pseudoCss);
+    }
+  }
+
+  if (checkChildren) {
+    for (var i = 0; i < node.children.length; ++i) {
+      const child = node.children[i];
+      const { matchedCSSRules } = await CSS.getMatchedStylesForNode({
+        nodeId: child.nodeId,
+      });
+      for (const ruleMatch of matchedCSSRules) {
+        if (!childRuleSerializedSets[i].has(JSON.stringify(ruleMatch))) {
+          // TODO: parse selector to determine pseudo class
+          const suffix = `:hover > #${child.id}`;
           parseCSSProperties(
-            rule.rule.style.cssProperties,
-            rule.rule.style.cssText,
+            ruleMatch.rule.style.cssProperties,
+            ruleMatch.rule.style.cssText,
             (pseudoCss[suffix] = pseudoCss[suffix] || {}),
           );
         }
       }
-    }
-  }
-
-  iteratePseudo(matchedCSSRules);
-  for (const match of pseudoElements) {
-    if (isEffectivePseudoElem(match, node)) {
-      iteratePseudo(match.matches);
     }
   }
 

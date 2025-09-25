@@ -684,15 +684,13 @@ export class Crawler extends EventEmitter {
 
       let totalElements = 0;
       const initElements = async (node: Node) => {
-        const { computedStyle } = await CSS.getComputedStyleForNode({
-          nodeId: node.nodeId,
-        });
-        node.computedStyle = computedStyle;
         await setIdAttrs(node);
         node.css = {};
         totalElements += 1;
       };
       await this.traverse(root, initElements, true);
+
+      const dom = this.toJSDOM(root, true);
 
       let processed = 0;
       await this.traverse(
@@ -716,6 +714,13 @@ export class Crawler extends EventEmitter {
         },
         !this.toHighlight,
       );
+
+      const checkChildrenNodeIds = new Set<number>();
+      dom.window.document
+        .querySelectorAll("li:has([aria-expanded])")
+        .forEach((el: HTMLElement) => {
+          checkChildrenNodeIds.add(Number(el.attributes["data-nodeId"].value));
+        });
       processed = 0;
       await this.traverse(
         root,
@@ -725,7 +730,12 @@ export class Crawler extends EventEmitter {
               showOverlay: false,
             });
           }
-          await cascadePseudoClass(node, CSS, i);
+          await cascadePseudoClass(
+            node,
+            CSS,
+            i,
+            checkChildrenNodeIds.has(node.nodeId),
+          );
           processed += 1;
           this.emitProgress({
             crawlProgress: {
