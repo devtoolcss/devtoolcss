@@ -40,6 +40,7 @@ export interface CrawlConfig {
   deviceWidths: number[];
   deviceScaleFactor: number;
   recursive: boolean;
+  urlFilter: RegExp;
   browserScan: boolean;
   maxPages?: number;
   delayAfterNavigateMs: number;
@@ -317,7 +318,10 @@ export class Crawler extends EventEmitter {
         for (const rawLink of pageLinks) {
           const normalizedLink = normalizePageURL(rawLink, origin);
           // TODO: handle base, not just origin
-          if (!seen.has(normalizedLink)) {
+          if (
+            !seen.has(normalizedLink) &&
+            this.cfg.urlFilter.test(normalizedLink)
+          ) {
             seen.add(normalizedLink);
             queue.push(normalizedLink);
           }

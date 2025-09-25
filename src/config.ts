@@ -119,6 +119,11 @@ export function argsToConfig(): CrawlConfig {
       default: false,
       desc: "Recursively crawl same-site links",
     })
+    .option("url-filter", {
+      type: "string",
+      default: ".*",
+      desc: "Regex pattern for filtering URLs when crawling recursively",
+    })
     .option("browser-scan", {
       type: "boolean",
       default: false,
@@ -191,6 +196,7 @@ Tried: ${defaultBrowserCmds.join(", ")}`);
     deviceWidths,
     deviceScaleFactor: argv["device-scale-factor"],
     recursive: argv["recursive"],
+    urlFilter: new RegExp(argv["url-filter"]),
     browserScan: argv["browser-scan"],
     maxPages: argv["max-pages"],
     delayAfterNavigateMs: argv["delay-after-nav"],
