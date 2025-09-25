@@ -99,39 +99,11 @@ export async function cascadePseudoClass(
   screenSize: number,
 ) {
   const pseudoCss = {};
-  //BUG: sometimes svg or some div nodeId=0
-  /*
-				const propertiesToTrack = [
-					{ name: "color", value: "black" },
-					//{ name: "color", value: "red" },
-				];
-				for (const [name, values] of Object.entries(computedStyles)) {
-					for (const value of values) {
-						propertiesToTrack.push({ name, value });
-					}
-				}
-				console.log("nodeId", node.children[0].nodeId);
-
-				await CSS.trackComputedStyleUpdates({
-					propertiesToTrack,
-				});
-
-				console.log("takeComputedStyleUpdates");
-				const p = CSS.takeComputedStyleUpdates();
-				*/
 
   await CSS.forcePseudoState({
     nodeId: node.nodeId,
     forcedPseudoClasses: pseudoClasses,
   });
-
-  /*
-				console.log("await takeComputedStyleUpdates");
-				const UpdatedNodeIds = await p;
-				console.log("updated nodes", UpdatedNodeIds);
-
-				await CSS.trackComputedStyleUpdates({ propertiesToTrack: [] });
-				*/
 
   var { matchedCSSRules, pseudoElements } = await CSS.getMatchedStylesForNode({
     nodeId: node.nodeId,
@@ -165,21 +137,10 @@ export async function cascadePseudoClass(
     }
   }
 
-  // TODO: to solve hover a and show b problem, use nodeId as id and construct #a #b selector.
-  // select right pseudo class by search the : and verify the selector prefix
-
   await CSS.forcePseudoState({
     nodeId: node.nodeId,
     forcedPseudoClasses: [],
   });
-
-  /*
-				Object.entries(pseudoCss).forEach(([key, value]) => {
-					Object.values(value).forEach((prop) => {
-						prop.important = true;
-					});
-				});
-				*/
 
   node.css[screenSize] = { ...node.css[screenSize], ...pseudoCss };
 }
