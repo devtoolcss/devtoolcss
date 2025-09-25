@@ -784,79 +784,7 @@ export class Crawler extends EventEmitter {
       true,
     );
 
-    const toJSDOM = (cdpRoot: Node) => {
-      const dom = new JSDOM("<html><head></head><body></body></html>");
-      const document: Document = dom.window.document;
-
-      const buildNode = (cdpNode: Node, document: Document): HTMLElement => {
-        let node;
-
-        switch (cdpNode.nodeType) {
-          case CDPNodeType.ELEMENT_NODE:
-            // iframe is safe because no children (not setting pierce)
-            node = document.createElement(cdpNode.nodeName.toLowerCase());
-
-            if (Array.isArray(cdpNode.attributes)) {
-              for (let i = 0; i < cdpNode.attributes.length; i += 2) {
-                node.setAttribute(
-                  cdpNode.attributes[i],
-                  cdpNode.attributes[i + 1],
-                );
-              }
-            }
-            break;
-
-          case CDPNodeType.TEXT_NODE:
-            node = document.createTextNode(cdpNode.nodeValue || "");
-            break;
-
-          case CDPNodeType.COMMENT_NODE:
-            node = document.createComment(cdpNode.nodeValue || "");
-            break;
-
-          case CDPNodeType.DOCUMENT_NODE:
-            node = document.createElement(cdpNode.nodeName.toLowerCase());
-            if (Array.isArray(cdpNode.attributes)) {
-              for (let i = 0; i < cdpNode.attributes.length; i += 2) {
-                node.setAttribute(
-                  cdpNode.attributes[i],
-                  cdpNode.attributes[i + 1],
-                );
-              }
-            }
-            return;
-
-          case CDPNodeType.DOCUMENT_TYPE_NODE: // DOCUMENT_TYPE_NODE
-            return null;
-
-          default:
-            this.emitProgress({
-              message: {
-                level: "warning",
-                text: `Unsupported node type: ${cdpNode.nodeType}\n${cdpNode}`,
-              },
-            });
-            return null;
-        }
-
-        // Recursively add children
-        if (cdpNode.children) {
-          for (const child of cdpNode.children) {
-            const childNode = buildNode(child, document);
-            if (childNode) node.appendChild(childNode);
-          }
-        }
-
-        return node;
-      };
-
-      const jsdomRoot = buildNode(cdpRoot, document);
-      const htmlNode = document.querySelector("html");
-      htmlNode.replaceChild(jsdomRoot, htmlNode.querySelector("body"));
-      return dom;
-    };
-
-    const dom = toJSDOM(cdpRoot);
+    const dom = this.toJSDOM(cdpRoot);
     this.cleanTags(dom.window.document);
     this.inlineStyle(dom.window.document);
 
@@ -953,6 +881,77 @@ export class Crawler extends EventEmitter {
         },
       });
     }
+  }
+  private toJSDOM(cdpBody: Node) {
+    const dom = new JSDOM("<html><head></head><body></body></html>");
+    const document = dom.window.document;
+
+    const buildNode = (cdpNode: Node, document: Document): HTMLElement => {
+      let node;
+
+      switch (cdpNode.nodeType) {
+        case CDPNodeType.ELEMENT_NODE:
+          // iframe is safe because no children (not setting pierce)
+          node = document.createElement(cdpNode.nodeName.toLowerCase());
+
+          if (Array.isArray(cdpNode.attributes)) {
+            for (let i = 0; i < cdpNode.attributes.length; i += 2) {
+              node.setAttribute(
+                cdpNode.attributes[i],
+                cdpNode.attributes[i + 1],
+              );
+            }
+          }
+          break;
+
+        case CDPNodeType.TEXT_NODE:
+          node = document.createTextNode(cdpNode.nodeValue || "");
+          break;
+
+        case CDPNodeType.COMMENT_NODE:
+          node = document.createComment(cdpNode.nodeValue || "");
+          break;
+
+        case CDPNodeType.DOCUMENT_NODE:
+          node = document.createElement(cdpNode.nodeName.toLowerCase());
+          if (Array.isArray(cdpNode.attributes)) {
+            for (let i = 0; i < cdpNode.attributes.length; i += 2) {
+              node.setAttribute(
+                cdpNode.attributes[i],
+                cdpNode.attributes[i + 1],
+              );
+            }
+          }
+          return;
+
+        case CDPNodeType.DOCUMENT_TYPE_NODE: // DOCUMENT_TYPE_NODE
+          return null;
+
+        default:
+          this.emitProgress({
+            message: {
+              level: "warning",
+              text: `Unsupported node type: ${cdpNode.nodeType}\n${cdpNode}`,
+            },
+          });
+          return null;
+      }
+
+      // Recursively add children
+      if (cdpNode.children) {
+        for (const child of cdpNode.children) {
+          const childNode = buildNode(child, document);
+          if (childNode) node.appendChild(childNode);
+        }
+      }
+
+      return node;
+    };
+
+    const jsdomRoot = buildNode(cdpBody, document);
+    const htmlNode = document.querySelector("html");
+    htmlNode.replaceChild(jsdomRoot, htmlNode.querySelector("body"));
+    return dom;
   }
 
   private mergeStyles(
