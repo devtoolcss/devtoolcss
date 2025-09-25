@@ -8,9 +8,9 @@ import {
 
 import * as CSSwhat from "css-what";
 
-import type { Node, CSSApi } from "./types.js";
+import type { Node, CSSApi, RuleMatch } from "./types.js";
 
-export async function cascade(node: Node, CSS: CSSApi, screenSize) {
+export async function cascade(node: Node, CSS: CSSApi, screenSize: number) {
   //BUG: sometimes svg or some div nodeId=0
   const css = { "": {} };
 
@@ -93,7 +93,11 @@ export async function cascade(node: Node, CSS: CSSApi, screenSize) {
   node.css[screenSize] = css;
 }
 
-export async function cascadePseudoClass(node, CSS, screenSize) {
+export async function cascadePseudoClass(
+  node: Node,
+  CSS: CSSApi,
+  screenSize: number,
+) {
   const pseudoCss = {};
   //BUG: sometimes svg or some div nodeId=0
   /*
@@ -133,10 +137,7 @@ export async function cascadePseudoClass(node, CSS, screenSize) {
     nodeId: node.nodeId,
   });
 
-  // TODO: pseudoVars for overridden
-  // also cascade with non-pseudo and compare to ensure overridden
-
-  function iteratePseudo(rules) {
+  function iteratePseudo(rules: RuleMatch[]) {
     for (const rule of rules) {
       if (rule.rule.origin !== "regular") continue;
       const matchingSelectors = rule.matchingSelectors.map(

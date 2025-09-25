@@ -24,6 +24,8 @@ export type RuntimeApi = ProtocolProxyApi.RuntimeApi;
 
 export type HighlightConfig = Protocol.Overlay.HighlightConfig;
 
+export type RuleMatch = Protocol.CSS.RuleMatch;
+
 export enum CDPNodeType {
   ELEMENT_NODE = 1,
   //ATTRIBUTE_NODE = 2,
