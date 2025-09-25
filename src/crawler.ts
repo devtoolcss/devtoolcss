@@ -1159,9 +1159,9 @@ export class Crawler extends EventEmitter {
         } else {
           // inlineStyle
           //el.style.cssText = "";
-
           // JSDOM's cssstyle doesn't handle gap.
           // TODO: fix upstream
+          /*
           for (const { legacyProp, newProp } of [
             { legacyProp: "grid-gap", newProp: "gap" },
             { legacyProp: "grid-row-gap", newProp: "row-gap" },
@@ -1179,6 +1179,13 @@ export class Crawler extends EventEmitter {
               value.important ? "important" : "",
             );
           });
+          */
+          // JSDOM CSSOM is buggy, directly set style attr
+          let cssText = "";
+          for (const [key, value] of Object.entries(data)) {
+            cssText += `${key}: ${value.value}${value.important ? " !important" : ""}; `;
+          }
+          (el as HTMLElement).setAttribute("style", cssText.trim());
         }
 
         // cleanup attrs
