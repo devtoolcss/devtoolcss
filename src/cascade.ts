@@ -13,6 +13,9 @@ import type { Node, CSSApi, RuleMatch, CSSRules } from "./types.js";
 export async function cascade(node: Node, CSS: CSSApi, screenSize: number) {
   const css = { "": {} };
 
+  // bottleneck of speed, can take 4s for large css, though mitigated with async
+  // in browser's protocol monitor only takes <50ms, corresponding to cascade total time average
+  //var startTime = Date.now();
   var {
     inherited,
     inlineStyle,
@@ -20,6 +23,10 @@ export async function cascade(node: Node, CSS: CSSApi, screenSize: number) {
     matchedCSSRules,
     pseudoElements,
   } = await CSS.getMatchedStylesForNode({ nodeId: node.nodeId });
+
+  //console.log("getMatchedStylesForNode", Date.now() - startTime);
+
+  // the rest takes <100ms
 
   if (inherited) {
     for (let i = inherited.length - 1; i >= 0; i--) {
