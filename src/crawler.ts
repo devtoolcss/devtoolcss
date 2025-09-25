@@ -716,11 +716,15 @@ export class Crawler extends EventEmitter {
       );
 
       const checkChildrenNodeIds = new Set<number>();
-      dom.window.document
-        .querySelectorAll("li:has([aria-expanded])")
-        .forEach((el: HTMLElement) => {
-          checkChildrenNodeIds.add(Number(el.attributes["data-nodeId"].value));
-        });
+      try {
+        dom.window.document
+          .querySelectorAll("li:has([aria-expanded])")
+          .forEach((el: HTMLElement) => {
+            checkChildrenNodeIds.add(
+              Number(el.attributes["data-nodeId"].value),
+            );
+          });
+      } catch {}
       processed = 0;
       await this.traverse(
         root,
