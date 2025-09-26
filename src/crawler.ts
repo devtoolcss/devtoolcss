@@ -514,20 +514,21 @@ export class Crawler extends EventEmitter {
     // cannot have multiple at a time
     async function getChildren(node: Node): Promise<void> {
       const childrenPromise = new Promise<void>((resolve) => {
+        // no children to request, also good
+        const timeoutId = setTimeout(() => {
+          removeListener();
+          resolve();
+        }, 250);
+
         let removeListener;
         removeListener = DOM.on("setChildNodes", (params) => {
           if (node.nodeId !== params.parentId) return;
           removeListener();
           node.children = params.nodes;
           buildNodeMap(node);
+          clearTimeout(timeoutId);
           resolve();
         });
-
-        // no children to request, also good
-        setTimeout(() => {
-          removeListener();
-          resolve();
-        }, 250);
       });
       DOM.requestChildNodes({
         nodeId: node.nodeId,
