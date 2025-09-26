@@ -4,7 +4,7 @@ import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import { execSync, ChildProcess, spawn } from "child_process";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
-import type { Node, DOMApi } from "./types.js";
+import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
 import { CDPNodeType } from "./types.js";
 import {
   getAvailableFilename,
@@ -20,6 +20,7 @@ import {
   normalizeSameSiteHref,
 } from "./runtime.js";
 import { cascade, cascadePseudoClass } from "./cascade.js";
+import { pseudoClasses } from "./css_parser.js";
 import { highlightNode } from "./highlight.js";
 import {
   getPath,
@@ -699,7 +700,10 @@ export class Crawler extends EventEmitter {
           if (this.toHighlight) {
             await highlightNode(node, DOM, Runtime, Overlay);
           }
-          await cascade(node, CSS, i);
+          const styles = await CSS.getMatchedStylesForNode({
+            nodeId: node.nodeId,
+          });
+          node.css[i] = { ...node.css[i], ...cascade(node, styles) };
           processed += 1;
           this.emitProgress({
             crawlProgress: {
@@ -734,12 +738,63 @@ export class Crawler extends EventEmitter {
               showOverlay: false,
             });
           }
-          await cascadePseudoClass(
+
+          // collect styles
+          const checkChildren =
+            checkChildrenNodeIds.has(node.nodeId) && node.children;
+          const childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [];
+          const childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [];
+
+          if (checkChildren) {
+            // use for loop to await, forEach will not
+            for (let i = 0; i < node.children.length; ++i) {
+              const child = node.children[i];
+              const childrenStyle = await CSS.getMatchedStylesForNode({
+                nodeId: child.nodeId,
+              });
+              childrenStyleBefore.push(childrenStyle);
+            }
+          }
+
+          await CSS.forcePseudoState({
+            nodeId: node.nodeId,
+            forcedPseudoClasses: pseudoClasses,
+          });
+
+          const styles = await CSS.getMatchedStylesForNode({
+            nodeId: node.nodeId,
+          });
+
+          if (checkChildren) {
+            for (let i = 0; i < node.children.length; ++i) {
+              const child = node.children[i];
+              const childrenStyle = await CSS.getMatchedStylesForNode({
+                nodeId: child.nodeId,
+              });
+              childrenStyleAfter.push(childrenStyle);
+            }
+          }
+
+          await CSS.forcePseudoState({
+            nodeId: node.nodeId,
+            forcedPseudoClasses: [],
+          });
+
+          const pseudoCss = cascadePseudoClass(
             node,
-            CSS,
-            i,
-            checkChildrenNodeIds.has(node.nodeId),
+            styles,
+            childrenStyleBefore,
+            childrenStyleAfter,
           );
+
+          //console.log("pseudoCss", pseudoCss);
+
+          node.css[i] = {
+            ...node.css[i],
+            ...pseudoCss,
+          };
+          //console.log("node.css", node.css[i]);
+
           processed += 1;
           this.emitProgress({
             crawlProgress: {
@@ -900,7 +955,7 @@ export class Crawler extends EventEmitter {
       this.emitProgress({
         message: {
           level: "error",
-          text: `${callback.name}: ${e.message}`,
+          text: e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
         },
       });
     }
