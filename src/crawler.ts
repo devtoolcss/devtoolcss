@@ -575,6 +575,11 @@ export class Crawler extends EventEmitter {
 
               // the node from insert event may or maynot have children initialized
               // hope not partially initialized like describeNode
+
+              // For node (ex: h1) with only a #text child, won't get response
+              // devtool UI also expand the #text as the same level
+              // seems childNodeInserted will handle this by selective providing children
+              // so here checking !node.children is good
               const node: Node = param["node"];
               if (
                 node.nodeType === CDPNodeType.ELEMENT_NODE &&
