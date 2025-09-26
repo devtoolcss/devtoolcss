@@ -167,7 +167,7 @@ export function argsToConfig(): CrawlConfig {
 
   validateWidths(breakpoints, deviceWidths);
 
-  var browserPath: string | undefined = argv["browser-path"];
+  let browserPath: string | undefined = argv["browser-path"];
   if (!browserPath) {
     for (const cmd of defaultBrowserCmds) {
       if (isInPath(cmd)) {

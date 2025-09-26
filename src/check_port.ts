@@ -2,7 +2,7 @@
 import net from "net";
 
 export async function portInUse(port: number): Promise<boolean> {
-  var server = net.createServer((socket) => {
+  let server = net.createServer((socket) => {
     socket.write("Echo server\r\n");
     socket.pipe(socket);
   });

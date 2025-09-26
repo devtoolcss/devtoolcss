@@ -116,7 +116,7 @@ export class Crawler extends EventEmitter {
       : [this.cfg.url];
 
     const succURLs: string[] = [];
-    var failedCount = 0;
+    let failedCount = 0;
 
     this.prepareDir();
 
@@ -124,7 +124,7 @@ export class Crawler extends EventEmitter {
       phase: "crawling",
     });
     // crawling
-    for (var i = 0; i < pageURLs.length; i++) {
+    for (let i = 0; i < pageURLs.length; i++) {
       const url = pageURLs[i];
       // announce page start (used by UI for progress and stage highlighting)
       this.emitProgress({
@@ -514,7 +514,7 @@ export class Crawler extends EventEmitter {
     // cannot have multiple at a time
     async function getChildren(node: Node): Promise<void> {
       const childrenPromise = new Promise<void>((resolve) => {
-        var removeListener;
+        let removeListener;
         removeListener = DOM.on("setChildNodes", (params) => {
           if (node.nodeId !== params.parentId) return;
           removeListener();
@@ -550,7 +550,7 @@ export class Crawler extends EventEmitter {
 
       async function updateNode(param) {
         function findNodeIdx(nodes: Node[], nodeId: number): number {
-          for (var i = 0; i < nodes.length; i++) {
+          for (let i = 0; i < nodes.length; i++) {
             if (nodes[i].nodeId === nodeId) {
               return i;
             }
@@ -1129,7 +1129,7 @@ export class Crawler extends EventEmitter {
         acc = { ...acc, ...root.css };
         return acc;
       }, {});
-      for (var i = 0; i < this.screens.length; ++i) {
+      for (let i = 0; i < this.screens.length; ++i) {
         if (!mergedRoot.css[i]) {
           mergedRoot.css[i] = {};
           mergedRoot.css[i][`#${mergedRoot.id}`] = {

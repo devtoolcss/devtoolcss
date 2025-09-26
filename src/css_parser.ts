@@ -29,7 +29,7 @@ export const separators = [
 export function isEffectivePseudoElem(pseudoMatch, node) {
   const pseudoType = pseudoMatch.pseudoType;
   if (pseudoType === "before" || pseudoType === "after") {
-    var content = '""';
+    let content = '""';
     for (const match of pseudoMatch.matches) {
       for (const prop of match.rule.style.cssProperties) {
         if (prop.name === "content") content = prop.value;
@@ -67,8 +67,8 @@ export function hasPseudoClass(parsedSelector) {
 
 export function getNormalizedSuffix(parsedSelector) {
   const pseudoClasses = [];
-  var pseudoElement = null;
-  for (var i = parsedSelector.length - 1; i >= 0; --i) {
+  let pseudoElement = null;
+  for (let i = parsedSelector.length - 1; i >= 0; --i) {
     if (parsedSelector[i].type === "pseudo") {
       if (!parsedSelector[i].data) {
         // exclude functional pseudo-classes
@@ -134,7 +134,7 @@ export function parseCSSProperties(
   }
 }
 export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
-  var stylesheet = "";
+  let stylesheet = "";
   for (const [selector, rules] of Object.entries(css)) {
     const decls = Object.entries(rules)
       .map(

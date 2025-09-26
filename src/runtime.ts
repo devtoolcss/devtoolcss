@@ -59,7 +59,7 @@ export function normalizeSameSiteHref(origin) {
       try {
         const url = new URL(el.href, document.baseURI);
         if (url.origin === origin) {
-          var pathname = url.pathname ? url.pathname : "/";
+          let pathname = url.pathname ? url.pathname : "/";
           // handle extensions like .php, .asp, .aspx, etc
           const ext = pathname.split("/").pop()?.split(".").pop();
           if (

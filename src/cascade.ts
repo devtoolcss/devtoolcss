@@ -19,7 +19,7 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
 
   // bottleneck of speed, can take 4s for large css, though mitigated with async
   // in browser's protocol monitor only takes <50ms, corresponding to cascade total time average
-  //var startTime = Date.now();
+  //let startTime = Date.now();
   const {
     inherited,
     inlineStyle,

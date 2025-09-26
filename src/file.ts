@@ -22,7 +22,7 @@ export function getExtension(url) {
 }
 
 // handle wordpress %3F ending of filename
-var counter = 0;
+let counter = 0;
 export async function getFilename(url: string) {
   const urlObj = new URL(url);
   const lastSegment = urlObj.pathname.substring(
@@ -45,7 +45,7 @@ export async function getFilename(url: string) {
         }
       }
       // fallback: use host as filename
-      var fileExt = "";
+      let fileExt = "";
       const contentType = res.headers.get("content-type");
       if (contentType) {
         const parts = contentType.split("/");
