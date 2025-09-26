@@ -659,8 +659,12 @@ export class Crawler extends EventEmitter {
       node.id = id;
     }
 
-    for (let i = 0; i < this.screens.length; i++) {
-      const { width, height, mobile } = this.screens[i];
+    for (
+      let deviceIndex = 0;
+      deviceIndex < this.screens.length;
+      deviceIndex++
+    ) {
+      const { width, height, mobile } = this.screens[deviceIndex];
       await Emulation.setDeviceMetricsOverride({
         width,
         height,
@@ -671,7 +675,7 @@ export class Crawler extends EventEmitter {
       this.emitProgress({
         crawlProgress: {
           stageIndex: CrawlStages.Load,
-          deviceIndex: i,
+          deviceIndex,
         },
       });
 
@@ -703,7 +707,10 @@ export class Crawler extends EventEmitter {
           const styles = await CSS.getMatchedStylesForNode({
             nodeId: node.nodeId,
           });
-          node.css[i] = { ...node.css[i], ...cascade(node, styles) };
+          node.css[deviceIndex] = {
+            ...node.css[deviceIndex],
+            ...cascade(node, styles),
+          };
           processed += 1;
           this.emitProgress({
             crawlProgress: {
@@ -789,8 +796,8 @@ export class Crawler extends EventEmitter {
 
           //console.log("pseudoCss", pseudoCss);
 
-          node.css[i] = {
-            ...node.css[i],
+          node.css[deviceIndex] = {
+            ...node.css[deviceIndex],
             ...pseudoCss,
           };
           //console.log("node.css", node.css[i]);
