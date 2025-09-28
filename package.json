@@ -36,6 +36,6 @@
     "type-check": "tsc --noEmit"
   },
   "bin": {
-    "cleanclone": "./dist/cli.js"
+    "cleanclone": "dist/cli.js"
   }
 }
