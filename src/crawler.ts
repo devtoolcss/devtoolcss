@@ -858,6 +858,7 @@ export class Crawler extends EventEmitter {
     this.cleanTags(dom.window.document);
     this.inlineStyle(dom.window.document);
 
+    // --disable-web-security may help, but unstable and not get all somehow
     const { result: resultFonts } = await Runtime.evaluate({
       expression:
         getFontRules.toString() +
