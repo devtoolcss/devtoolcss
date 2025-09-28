@@ -14,7 +14,7 @@ cleanclone --url {url} [options]
 
 ## Demo
 
-https://github.com/user-attachments/assets/2c6785df-8470-4350-b77a-6980ef1364bb
+https://github.com/user-attachments/assets/bc27a8a2-8a6f-469c-a29c-955cab2d4ebc
 
 ## About
 
