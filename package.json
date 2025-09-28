@@ -3,12 +3,16 @@
   "version": "0.0.3",
   "description": "Inline DevTool-parsed CSS for any website and crawl it on the fly.",
   "license": "MIT",
-  "type": "module",
   "files": [
     "dist/",
     "README.md",
     "LICENSE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:b10902118/cleanclone.git"
+  },
+  "homepage": "https://github.com/b10902118/cleanclone#readme",
   "keywords": [
     "css",
     "html",
@@ -16,6 +20,7 @@
     "inline",
     "devtools-protocol"
   ],
+  "type": "module",
   "dependencies": {
     "chalk": "^5.6.2",
     "chrome-remote-interface": "^0.33.3",
