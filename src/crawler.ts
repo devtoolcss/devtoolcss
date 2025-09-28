@@ -880,7 +880,7 @@ export class Crawler extends EventEmitter {
     } else if (ext) {
       // handle extensions like .php, .asp, .aspx, etc
       const pagePathRewritten =
-        pagePathDecoded.slice(0, pagePathDecoded.length - ext.length) + "html";
+        pagePathDecoded.slice(0, pagePathDecoded.length - ext.length) + ".html";
       htmlDir = path.join(this.cfg.outDir, path.dirname(pagePathRewritten));
       htmlPath = path.join(htmlDir, path.basename(pagePathRewritten));
       pageBase = path.dirname(pagePath);
