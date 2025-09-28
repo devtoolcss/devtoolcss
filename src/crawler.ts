@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
-import { execSync, ChildProcess, spawn } from "child_process";
+import * as ChromeLauncher from "chrome-launcher";
 import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
 import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
 import { CDPNodeType } from "./types.js";
@@ -28,7 +28,6 @@ import {
   normalizePageURL,
   selectPageLinks,
 } from "./url.js";
-import { portInUse } from "./check_port.js";
 import { JSDOM } from "jsdom";
 
 export interface CrawlConfig {
@@ -92,7 +91,7 @@ export interface CrawlSummary {
 
 export class Crawler extends EventEmitter {
   private cfg: CrawlConfig;
-  private browserProcess: ChildProcess | null = null;
+  private chrome: ChromeLauncher.LaunchedChrome | null = null;
   private fontCSSSet = new Set<string>();
   private downloadedURLs = new Set<string>();
   private assetDir = "";
@@ -168,6 +167,8 @@ export class Crawler extends EventEmitter {
         fs.rmdirSync(dirPath);
     }
 
+    await this.closeBrowser();
+
     return {
       failed: failedCount,
       succeeded: succURLs.length,
@@ -177,35 +178,10 @@ export class Crawler extends EventEmitter {
   }
 
   stop() {
-    if (this.browserProcess) {
-      // Reference:
-      // https://github.com/puppeteer/puppeteer/blob/b6e14926826129dfdf8e51937f86b1f9b0eaf59e/packages/browsers/src/launch.ts#L433
-      //
-      // basically both puppeteer and playwright do the same
-
-      if (process.platform === "win32") {
-        try {
-          execSync(`taskkill /pid ${this.browserProcess.pid} /T /F`);
-        } catch (error) {
-          // taskkill can fail to kill the process e.g. due to missing permissions.
-          // Let's kill the process via Node API. This delays killing of all child
-          // processes of `this.proc` until the main Node.js process dies.
-          this.browserProcess.kill();
-        }
-      } else {
-        // on linux the process group can be killed with the group id prefixed with
-        // a minus sign. The process group id is the group leader's pid.
-        const processGroupId = -this.browserProcess.pid;
-
-        try {
-          process.kill(processGroupId, "SIGKILL");
-        } catch (error) {
-          // Killing the process group can fail due e.g. to missing permissions.
-          // Let's kill the process via Node API. This delays killing of all child
-          // processes of `this.proc` until the main Node.js process dies.
-          this.browserProcess.kill("SIGKILL");
-        }
-      }
+    if (this.chrome.process) {
+      try {
+        this.chrome.kill();
+      } catch {}
     }
   }
 
@@ -223,15 +199,18 @@ export class Crawler extends EventEmitter {
         text: `Launching browser: ${browserPath} ${args.join(" ")}`,
       },
     });
-    const portUsed = await portInUse(9222);
-    if (portUsed) {
-      throw Error("Port 9222 already in use, cannot launch browser");
-    }
-    this.browserProcess = spawn(browserPath, args, {
-      stdio: "ignore",
-      detached: true, // to kill as process leader
+    this.chrome = await ChromeLauncher.launch({
+      port: 9222,
+      chromeFlags: args,
+      maxConnectionRetries: 5,
     });
     await new Promise((r) => setTimeout(r, 1500));
+  }
+
+  private async closeBrowser() {
+    const target = await CDP.New();
+    const client = await CDP({ target: target.id });
+    await client.Browser.close();
   }
 
   private async extractLinksFetch(pageURL: string): Promise<string[]> {
