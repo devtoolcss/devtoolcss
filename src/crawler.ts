@@ -411,7 +411,7 @@ export class Crawler extends EventEmitter {
             ? filename
             : getAvailableFilename(outDir, filename);
           const outPath = path.join(outDir, outFilename);
-          const urlPath = path.join("/assets", type, outFilename);
+          const urlPath = path.posix.join("/assets", type, outFilename);
           if (!this.downloadedURLs.has(url)) {
             try {
               if (type === "audio" || type === "video") {

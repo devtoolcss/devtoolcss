@@ -25,7 +25,7 @@ export function rewriteResourceLinks(
     // remove leading /
     const absPath = urlObj.pathname;
     const relPath =
-      path.relative(base, absPath) + (absPath.endsWith("/") ? "/" : ""); // no leading './', preserve trailing /
+      path.posix.relative(base, absPath) + (absPath.endsWith("/") ? "/" : ""); // no leading './', preserve trailing /
     const relPathUri = relPath + urlObj.search + urlObj.hash;
     const urlDecoded = decodeURI(url);
     // Escape special regex characters in url and urlPath
