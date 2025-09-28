@@ -3,7 +3,7 @@
 ## Install
 
 ```
-npm i cleanclone
+npm i -g cleanclone
 ```
 
 ## Usage
