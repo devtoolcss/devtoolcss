@@ -2,13 +2,8 @@
 
 ## Install
 
-For development
-
 ```
-git clone https://github.com/b10902118/cleanclone.git
-cd cleanclone
-npm i
-npm link
+npm i cleanclone
 ```
 
 ## Usage
