@@ -12,7 +12,12 @@ import {
   traverse,
   CDPNodeType,
 } from "@clonecss/cleanclone-core";
-import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
+import type {
+  Node,
+  GetMatchedStylesForNodeResponse,
+  ParsedStyleSheet,
+  ParsedCSSRules,
+} from "./types.js";
 import {
   getAvailableFilename,
   getFilename,
@@ -1027,21 +1032,19 @@ export class Crawler extends EventEmitter {
     node: Node,
     screens: { width: number; height: number; mobile: boolean }[],
   ) {
-    const styleJSONs: any = {};
+    const styleJSONs: ParsedStyleSheet = {};
     Object.entries(node.css || {}).forEach(([screenKey, rules]) => {
       styleJSONs[screenKey] = toStyleJSON(
-        replaceVariables(toStyleSheet(rules as any)),
+        replaceVariables(toStyleSheet(rules)),
       );
     });
-    const sharedCSS: any = {};
+    const sharedCSS: ParsedCSSRules = {};
     const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
     if (firstStyleJSON) {
       for (const [targetSelector, targetRule] of Object.entries(
-        firstStyleJSON as any,
+        firstStyleJSON,
       )) {
-        for (const [targetProp, targetValue] of Object.entries(
-          targetRule as any,
-        )) {
+        for (const [targetProp, targetValue] of Object.entries(targetRule)) {
           const isShared = otherStyleJSONs.every(
             (styleJSON: any) =>
               styleJSON[targetSelector] &&
@@ -1067,8 +1070,7 @@ export class Crawler extends EventEmitter {
         }
       }
     }
-    let cssType = "styleSheet";
-    let cssData: any;
+    let style: string = "";
     if (
       Object.keys(styleJSONs).length === 0 &&
       Object.keys(sharedCSS).length === 0
@@ -1077,35 +1079,34 @@ export class Crawler extends EventEmitter {
     else if (
       Object.keys(styleJSONs).length === 0 &&
       Object.keys(sharedCSS).length === 1 &&
-      Object.keys(sharedCSS)[0] === `#${(node as any).id}`
+      Object.keys(sharedCSS)[0] === `#${node.id}`
     ) {
-      cssType = "inlineStyle";
-      cssData = sharedCSS[`#${node.id}`];
+      for (const [key, value] of Object.entries(sharedCSS[`#${node.id}`])) {
+        style += `${key}: ${value.value}${
+          value.important ? " !important" : ""
+        }; `;
+      }
     } else {
-      cssData = "";
-      if (Object.keys(sharedCSS).length > 0) cssData += toStyleSheet(sharedCSS);
+      if (Object.keys(sharedCSS).length > 0) style += toStyleSheet(sharedCSS);
       for (const key of Object.keys(styleJSONs)) {
         const i = parseInt(key);
         if (i === 0)
-          cssData += toStyleSheet(styleJSONs[i], null, this.cfg.breakpoints[i]);
+          style += toStyleSheet(styleJSONs[i], null, this.cfg.breakpoints[i]);
         else if (i === screens.length - 1)
-          cssData += toStyleSheet(
+          style += toStyleSheet(
             styleJSONs[i],
             this.cfg.breakpoints[i - 1],
             null,
           );
         else
-          cssData += toStyleSheet(
+          style += toStyleSheet(
             styleJSONs[i],
             this.cfg.breakpoints[i - 1],
             this.cfg.breakpoints[i],
           );
       }
     }
-    node.attributes.push(
-      "data-css",
-      JSON.stringify({ type: cssType, data: cssData }),
-    );
+    node.attributes.push("data-css", style);
   }
 
   private mergeTrees(roots: Node[]): Node {
@@ -1153,26 +1154,24 @@ export class Crawler extends EventEmitter {
     return mergedRoot;
   }
 
-  private inlineStyle(document: Document) {
+  private inlineStyle(
+    document: Document,
+    cssAttr = "data-css",
+    removeAttr = true,
+  ) {
     const body = document.querySelector("body");
     const elements = [...body.querySelectorAll("*")];
     elements.push(body);
     for (const el of elements) {
-      const dataCSSJSON = el.getAttribute("data-css");
-      if (dataCSSJSON) {
-        const dataCSS = JSON.parse(dataCSSJSON) as
-          | { type: "styleSheet"; data: string }
-          | {
-              type: "inlineStyle";
-              data: Record<string, { value: string; important?: boolean }>;
-            };
-        const { type, data } = dataCSS;
-        if (type === "styleSheet") {
+      const cssText = el.getAttribute(cssAttr);
+      if (cssText) {
+        const isStyleSheet = cssText.includes("{");
+        if (isStyleSheet) {
           // inline style can contain variables and override resolved stylesheet
           (el as HTMLElement).removeAttribute("style");
 
           const styleEl = document.createElement("style");
-          styleEl.textContent = data;
+          styleEl.textContent = cssText;
           const noChildTags = [
             // void elements
             // https://developer.mozilla.org/en-US/docs/Glossary/Void_element
@@ -1203,22 +1202,19 @@ export class Crawler extends EventEmitter {
             el.insertBefore(styleEl, el.children[0]);
           }
         } else {
+          // inline style
           // JSDOM CSSOM is buggy, directly set style attr
-          let cssText = "";
-          for (const [key, value] of Object.entries(data)) {
-            cssText += `${key}: ${value.value}${
-              value.important ? " !important" : ""
-            }; `;
-          }
-          (el as HTMLElement).setAttribute("style", cssText.trim());
+          (el as HTMLElement).setAttribute("style", cssText);
         }
 
         // cleanup attrs
-        [...el.attributes].forEach((attr) => {
-          if (attr.name === "data-css") {
-            el.removeAttribute(attr.name);
-          }
-        });
+        if (removeAttr) {
+          [...el.attributes].forEach((attr) => {
+            if (attr.name === cssAttr) {
+              el.removeAttribute(attr.name);
+            }
+          });
+        }
       }
     }
   }
