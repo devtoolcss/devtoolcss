@@ -1215,29 +1215,6 @@ export class Crawler extends EventEmitter {
             el.insertBefore(styleEl, el.children[0]);
           }
         } else {
-          // inlineStyle
-          //el.style.cssText = "";
-          // JSDOM's cssstyle doesn't handle gap.
-          // TODO: fix upstream
-          /*
-          for (const { legacyProp, newProp } of [
-            { legacyProp: "grid-gap", newProp: "gap" },
-            { legacyProp: "grid-row-gap", newProp: "row-gap" },
-            { legacyProp: "grid-column-gap", newProp: "column-gap" },
-          ]) {
-            if (data[legacyProp] && !data[newProp]) {
-              data[newProp] = data[legacyProp];
-              delete data[legacyProp];
-            }
-          }
-          Object.entries(data).forEach(([key, value]) => {
-            (el as HTMLElement).style.setProperty(
-              key,
-              value.value,
-              value.important ? "important" : "",
-            );
-          });
-          */
           // JSDOM CSSOM is buggy, directly set style attr
           let cssText = "";
           for (const [key, value] of Object.entries(data)) {
@@ -1248,19 +1225,7 @@ export class Crawler extends EventEmitter {
 
         // cleanup attrs
         [...el.attributes].forEach((attr) => {
-          if (
-            /*
-          attr.name !== "id" &&
-          attr.name !== "class" &&
-          attr.name !== "style" &&
-          attr.name !== "href" &&
-          attr.name !== "value" &&
-          attr.name !== "type" &&
-          //attr.name !== "data-pseudo" &&
-          !attr.name.includes("src")
-          */
-            attr.name === "data-css"
-          ) {
+          if (attr.name === "data-css") {
             el.removeAttribute(attr.name);
           }
         });

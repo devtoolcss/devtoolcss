@@ -90,9 +90,6 @@ export function parseCSSProperties(
   css,
   variableOnly = false,
 ) {
-  //console.log(cssProperties);
-  // TODO: fix logic, should remove if shorthand appear latter
-  //const longhandProperties = new Set();
   for (const prop of cssProperties) {
     // override to my definition
     //prop.explicit = Boolean(prop.range); // have false negative
@@ -102,13 +99,7 @@ export function parseCSSProperties(
 
     // longhandProperties not exist if first arg is var
     // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
-    /*
-    if (prop.longhandProperties) {
-      for (const longhand of prop.longhandProperties) {
-        longhandProperties.add(longhand.name);
-      }
-    }
-    */
+
     prop.explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
 
     if (prop.disabled || prop.parsedOk === false) {
