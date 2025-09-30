@@ -1,0 +1,11 @@
+{
+  "name": "cleanclone-monorepo",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces"
+  }
+}
