@@ -1,20 +1,19 @@
 import type { Protocol } from "devtools-protocol";
 import type { ProtocolProxyApi } from "devtools-protocol/types/protocol-proxy-api.js";
+import type { StyleSheet } from "@clonecss/cleanclone-core";
 
-export type CSSRules = {
-  [selector: string]: {
-    [property: string]: {
-      value: string;
-      important?: boolean;
-      explicit?: boolean;
-    };
-  };
-};
+export type {
+  StyleSheet,
+  RuleMatch,
+  CSSRules,
+  CSSProperty,
+  GetMatchedStylesForNodeResponse,
+} from "@clonecss/cleanclone-core";
 
 export type Node = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
   children?: Node[];
-  css?: { [key: string]: CSSRules };
+  css?: StyleSheet;
   //computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
 
@@ -24,10 +23,6 @@ export type OverlayApi = ProtocolProxyApi.OverlayApi;
 export type RuntimeApi = ProtocolProxyApi.RuntimeApi;
 
 export type HighlightConfig = Protocol.Overlay.HighlightConfig;
-
-export type GetMatchedStylesForNodeResponse =
-  Protocol.CSS.GetMatchedStylesForNodeResponse;
-export type RuleMatch = Protocol.CSS.RuleMatch;
 
 export enum CDPNodeType {
   ELEMENT_NODE = 1,
