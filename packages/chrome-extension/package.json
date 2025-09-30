@@ -1,0 +1,13 @@
+{
+  "name": "extension",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "type": "module",
+  "devDependencies": {
+    "@types/chrome": "^0.1.12"
+  },
+  "dependencies": {
+    "@clonecss/cleanclone-core": "file:../core"
+  }
+}
