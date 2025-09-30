@@ -9,14 +9,17 @@ import * as CSSwhat from "css-what";
 
 import type {
   RuleMatch,
-  CSSRules,
-  Node,
+  ParsedCSSRules,
+  NodeWithId,
   GetMatchedStylesForNodeResponse,
 } from "./types.js";
 
-export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
+export function cascade(
+  node: NodeWithId,
+  styles: GetMatchedStylesForNodeResponse,
+) {
   const idSelector = `#${node.id}`;
-  const css: CSSRules = { [idSelector]: {} };
+  const css: ParsedCSSRules = { [idSelector]: {} };
   const selfStyle = css[idSelector];
 
   // bottleneck of speed, can take 4s for large css, though mitigated with async
@@ -103,7 +106,7 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
 function iteratePseudo(
   idSelector: string,
   rules: RuleMatch[],
-  pseudoCss: CSSRules,
+  pseudoCss: ParsedCSSRules,
 ) {
   for (const rule of rules) {
     if (rule.rule.origin !== "regular") continue;
@@ -126,13 +129,13 @@ function iteratePseudo(
 }
 
 export function cascadePseudoClass(
-  node: Node,
+  node: NodeWithId,
   styles: GetMatchedStylesForNodeResponse,
   childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [],
   childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [],
 ) {
   const idSelector = `#${node.id}`;
-  const pseudoCss: CSSRules = {};
+  const pseudoCss: ParsedCSSRules = {};
 
   const { matchedCSSRules, pseudoElements } = styles;
 

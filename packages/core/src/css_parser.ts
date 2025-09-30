@@ -3,9 +3,9 @@ import postcss from "postcss";
 
 import type { PseudoElement, PseudoSelector, Selector } from "css-what";
 import type {
-  Node,
+  NodeWithId,
   PseudoElementMatches,
-  CSSRules,
+  ParsedCSSRules,
   CSSProperty,
 } from "./types.js";
 
@@ -20,7 +20,7 @@ export const separators = [
 
 export function isEffectivePseudoElem(
   pseudoMatch: PseudoElementMatches,
-  node: Node,
+  node: NodeWithId,
 ): boolean {
   const pseudoType = pseudoMatch.pseudoType;
   if (pseudoType === "before" || pseudoType === "after") {
@@ -82,7 +82,7 @@ export function getNormalizedSuffix(parsedSelector: Selector[]): string {
 export function parseCSSProperties(
   cssProperties: CSSProperty[],
   cssText: string,
-  css: CSSRules[string],
+  css: ParsedCSSRules[string],
   variableOnly = false,
 ) {
   for (const prop of cssProperties) {
@@ -122,7 +122,7 @@ export function parseCSSProperties(
 
 // if have media than cannot convert back to JSON
 export function toStyleSheet(
-  styleJSON: CSSRules,
+  styleJSON: ParsedCSSRules,
   mediaMinWidth: number | undefined = undefined,
   mediaMaxWidth: number | undefined = undefined,
 ) {
@@ -195,9 +195,9 @@ export function replaceVariables(styleSheet: string): string {
   return mergedRoot.toString();
 }
 
-export function toStyleJSON(styleSheet: string): CSSRules {
+export function toStyleJSON(styleSheet: string): ParsedCSSRules {
   const root = postcss.parse(styleSheet);
-  const result: CSSRules = {};
+  const result: ParsedCSSRules = {};
 
   root.walkRules((rule) => {
     const selector = rule.selector;

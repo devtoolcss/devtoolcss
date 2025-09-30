@@ -1,19 +1,20 @@
 import type { Protocol } from "devtools-protocol";
 import type { ProtocolProxyApi } from "devtools-protocol/types/protocol-proxy-api.js";
-import type { StyleSheet } from "@clonecss/cleanclone-core";
+import type { ParsedStyleSheet } from "@clonecss/cleanclone-core";
 
 export type {
-  StyleSheet,
-  RuleMatch,
-  CSSRules,
-  CSSProperty,
+  ParsedStyleSheet,
+  ParsedCSSProperties,
+  ParsedCSSRules,
   GetMatchedStylesForNodeResponse,
+  RuleMatch,
+  CSSProperty,
 } from "@clonecss/cleanclone-core";
 
 export type Node = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
   children?: Node[];
-  css?: StyleSheet;
+  css?: ParsedStyleSheet;
   //computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
 

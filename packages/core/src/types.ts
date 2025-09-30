@@ -1,25 +1,27 @@
 import type { Protocol } from "devtools-protocol";
 
-// mediaKey is just for grouping, content not important
-export type StyleSheet = { [mediaKey: string]: CSSRules };
-
 export type RuleMatch = Protocol.CSS.RuleMatch;
 export type PseudoElementMatches = Protocol.CSS.PseudoElementMatches;
 export type CSSProperty = Protocol.CSS.CSSProperty;
 
-export type CSSRules = {
-  [selector: string]: {
-    [property: string]: {
-      value: string;
-      important?: boolean;
-      explicit?: boolean;
-    };
+export type ParsedCSSProperties = {
+  [property: string]: {
+    value: string;
+    important?: boolean;
+    explicit?: boolean; // whether explicitly set in the CSS (not inherited)
   };
 };
 
-export type Node = Omit<Protocol.DOM.Node, "children"> & {
+export type ParsedCSSRules = {
+  [selector: string]: ParsedCSSProperties;
+};
+
+// mediaKey is just for grouping, content not important
+export type ParsedStyleSheet = { [mediaKey: string]: ParsedCSSRules };
+
+export type NodeWithId = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
-  children?: Node[];
+  children?: NodeWithId[];
   //computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
 
