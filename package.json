@@ -6,6 +6,10 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "format": "prettier --experimental-cli --write ."
+  },
+  "dependencies": {
+    "typescript": "^5.9.2"
   }
 }
