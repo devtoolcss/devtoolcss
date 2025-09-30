@@ -1092,7 +1092,7 @@ export class Crawler extends EventEmitter {
       Object.keys(sharedCSS)[0] === `#${(node as any).id}`
     ) {
       cssType = "inlineStyle";
-      cssData = sharedCSS[`#${(node as any).id}`];
+      cssData = sharedCSS[`#${node.id}`];
     } else {
       cssData = "";
       if (Object.keys(sharedCSS).length > 0) cssData += toStyleSheet(sharedCSS);
