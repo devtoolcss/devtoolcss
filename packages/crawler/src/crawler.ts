@@ -3,7 +3,13 @@ import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
-import { toStyleSheet, replaceVariables, toStyleJSON } from "./css_parser.js";
+import {
+  cascade,
+  cascadePseudoClass,
+  toStyleSheet,
+  replaceVariables,
+  toStyleJSON,
+} from "@clonecss/cleanclone-core";
 import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
 import { CDPNodeType } from "./types.js";
 import {
@@ -19,8 +25,6 @@ import {
   getAnchorHref,
   normalizeSameSiteHref,
 } from "./runtime.js";
-import { cascade, cascadePseudoClass } from "./cascade.js";
-import { pseudoClasses } from "./css_parser.js";
 import { highlightNode } from "./highlight.js";
 import {
   getPath,
@@ -49,6 +53,19 @@ export interface CrawlConfig {
   debug: boolean;
   overlay: boolean;
 }
+
+export const pseudoClasses = [
+  "active",
+  "hover",
+  "focus",
+  "checked",
+  "enabled",
+  "disabled",
+  "focus-within",
+  "autofill",
+  "target",
+  "valid",
+];
 
 export enum CrawlStages {
   Load = 0,
@@ -311,14 +328,18 @@ export class Crawler extends EventEmitter {
         this.emitProgress({
           message: {
             level: "warning",
-            text: `Error scanning ${url}: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}`,
+            text: `Error scanning ${url}: ${
+              e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
+            }`,
           },
         });
         continue;
       }
     }
 
-    const messageText = `${pages.size} pages found:\n${[...pages].join("\n")}\n`;
+    const messageText = `${pages.size} pages found:\n${[...pages].join(
+      "\n",
+    )}\n`;
     this.emitProgress({ message: { level: "info", text: messageText } });
     return [...pages];
   }
@@ -814,25 +835,12 @@ export class Crawler extends EventEmitter {
         }
       }
 
-      function addIdtoSelector(node: Node) {
-        for (const rulesObj of Object.values(node.css || {})) {
-          for (const [selector, rules] of Object.entries(rulesObj)) {
-            rulesObj[`#${node.id}` + selector] = rules;
-            delete rulesObj[selector];
-          }
-        }
-      }
-
       await this.traverse(root, (node) => {
         cleanUp(node);
-        addIdtoSelector(node);
       });
 
       const clonedRoot = structuredClone(root);
       roots.push(clonedRoot);
-      await this.traverse(root, (node) => {
-        delete node.css;
-      });
     }
 
     // stop recording requests
@@ -1218,7 +1226,9 @@ export class Crawler extends EventEmitter {
           // JSDOM CSSOM is buggy, directly set style attr
           let cssText = "";
           for (const [key, value] of Object.entries(data)) {
-            cssText += `${key}: ${value.value}${value.important ? " !important" : ""}; `;
+            cssText += `${key}: ${value.value}${
+              value.important ? " !important" : ""
+            }; `;
           }
           (el as HTMLElement).setAttribute("style", cssText.trim());
         }
