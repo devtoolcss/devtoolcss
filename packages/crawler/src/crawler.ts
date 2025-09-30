@@ -9,9 +9,10 @@ import {
   toStyleSheet,
   replaceVariables,
   toStyleJSON,
+  traverse,
+  CDPNodeType,
 } from "@clonecss/cleanclone-core";
 import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
-import { CDPNodeType } from "./types.js";
 import {
   getAvailableFilename,
   getFilename,
@@ -700,12 +701,12 @@ export class Crawler extends EventEmitter {
         node.css = {};
         totalElements += 1;
       };
-      await this.traverse(root, initElements, true);
+      await traverse(root, initElements, this.onError, true);
 
       const dom = this.toJSDOM(root, true);
 
       let processed = 0;
-      await this.traverse(
+      await traverse(
         root,
         async (node) => {
           if (this.toHighlight) {
@@ -730,6 +731,7 @@ export class Crawler extends EventEmitter {
             setTimeout(() => Overlay.hideHighlight(), 25);
           }
         },
+        this.onError,
         !this.toHighlight,
       );
 
@@ -744,7 +746,7 @@ export class Crawler extends EventEmitter {
           });
       } catch {}
       processed = 0;
-      await this.traverse(
+      await traverse(
         root,
         async (node) => {
           if (this.toHighlight) {
@@ -818,6 +820,7 @@ export class Crawler extends EventEmitter {
             },
           });
         },
+        this.onError,
         false,
       );
 
@@ -835,9 +838,14 @@ export class Crawler extends EventEmitter {
         }
       }
 
-      await this.traverse(root, (node) => {
-        cleanUp(node);
-      });
+      await traverse(
+        root,
+        (node) => {
+          cleanUp(node);
+        },
+        this.onError,
+        true,
+      );
 
       const clonedRoot = structuredClone(root);
       roots.push(clonedRoot);
@@ -855,11 +863,12 @@ export class Crawler extends EventEmitter {
 
     const cdpRoot = this.mergeTrees(roots);
 
-    await this.traverse(
+    await traverse(
       cdpRoot,
       (node) => {
         this.mergeStyles(node, this.screens);
       },
+      this.onError,
       true,
     );
 
@@ -938,35 +947,6 @@ export class Crawler extends EventEmitter {
     });
   }
 
-  private async traverse(
-    node: Node,
-    callback: (n: Node) => Promise<void> | void,
-    parallel = false,
-  ) {
-    if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return; // element
-    try {
-      await callback(node);
-
-      if (node.children) {
-        if (parallel)
-          await Promise.all(
-            node.children.map((c) =>
-              this.traverse(c as any, callback, parallel),
-            ),
-          );
-        else
-          for (const c of node.children)
-            await this.traverse(c as any, callback, parallel);
-      }
-    } catch (e) {
-      this.emitProgress({
-        message: {
-          level: "error",
-          text: e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
-        },
-      });
-    }
-  }
   private toJSDOM(cdpBody: Node, setNodeId = false) {
     const dom = new JSDOM("<html><head></head><body></body></html>");
     const document = dom.window.document;
@@ -1246,4 +1226,13 @@ export class Crawler extends EventEmitter {
     const toClean = document.querySelectorAll("script, link, style");
     toClean.forEach((el) => el.remove());
   }
+
+  private onError = (e: any) => {
+    this.emitProgress({
+      message: {
+        level: "error",
+        text: e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
+      },
+    });
+  };
 }
