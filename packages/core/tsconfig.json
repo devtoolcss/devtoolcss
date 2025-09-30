@@ -4,7 +4,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "declaration": true,
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
