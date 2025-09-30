@@ -8,14 +8,16 @@ import {
 import * as CSSwhat from "css-what";
 
 import type {
-  Node,
   RuleMatch,
   CSSRules,
+  Node,
   GetMatchedStylesForNodeResponse,
 } from "./types.js";
 
 export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
-  const css = { "": {} };
+  const idSelector = `#${node.id}`;
+  const css: CSSRules = { [idSelector]: {} };
+  const selfStyle = css[idSelector];
 
   // bottleneck of speed, can take 4s for large css, though mitigated with async
   // in browser's protocol monitor only takes <50ms, corresponding to cascade total time average
@@ -39,7 +41,7 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
         parseCSSProperties(
           inheritedStyle.inlineStyle.cssProperties,
           inheritedStyle.inlineStyle.cssText,
-          css[""],
+          selfStyle,
           true,
         );
       }
@@ -49,7 +51,7 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
           parseCSSProperties(
             rule.rule.style.cssProperties,
             rule.rule.style.cssText,
-            css[""],
+            selfStyle,
             true,
           );
         }
@@ -61,7 +63,7 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
     parseCSSProperties(
       attributesStyle.cssProperties,
       attributesStyle.cssText,
-      css[""],
+      selfStyle,
     );
 
   for (const rule of matchedCSSRules) {
@@ -70,19 +72,23 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
     parseCSSProperties(
       rule.rule.style.cssProperties,
       rule.rule.style.cssText,
-      css[""],
+      selfStyle,
     );
   }
 
   if (inlineStyle)
-    parseCSSProperties(inlineStyle.cssProperties, inlineStyle.cssText, css[""]);
+    parseCSSProperties(
+      inlineStyle.cssProperties,
+      inlineStyle.cssText,
+      selfStyle,
+    );
 
   for (const match of pseudoElements) {
     //match.pseudoType
     if (isEffectivePseudoElem(match, node)) {
       for (const rule of match.matches) {
         if (rule.rule.origin !== "regular") continue;
-        const key = "::" + match.pseudoType;
+        const key = `${idSelector}::${match.pseudoType}`;
         parseCSSProperties(
           rule.rule.style.cssProperties,
           rule.rule.style.cssText,
@@ -94,7 +100,11 @@ export function cascade(node: Node, styles: GetMatchedStylesForNodeResponse) {
   return css;
 }
 
-function iteratePseudo(rules: RuleMatch[], pseudoCss: CSSRules) {
+function iteratePseudo(
+  idSelector: string,
+  rules: RuleMatch[],
+  pseudoCss: CSSRules,
+) {
   for (const rule of rules) {
     if (rule.rule.origin !== "regular") continue;
     const matchingSelectors = rule.matchingSelectors.map(
@@ -103,12 +113,12 @@ function iteratePseudo(rules: RuleMatch[], pseudoCss: CSSRules) {
     for (const selector of matchingSelectors) {
       const parsedSelector = CSSwhat.parse(selector)[0];
       if (hasPseudoClass(parsedSelector)) {
-        const suffix = getNormalizedSuffix(parsedSelector);
-        if (!suffix) continue;
+        const selector = idSelector + getNormalizedSuffix(parsedSelector);
+        if (!selector) continue;
         parseCSSProperties(
           rule.rule.style.cssProperties,
           rule.rule.style.cssText,
-          (pseudoCss[suffix] = pseudoCss[suffix] || {}),
+          (pseudoCss[selector] = pseudoCss[selector] || {}),
         );
       }
     }
@@ -121,14 +131,15 @@ export function cascadePseudoClass(
   childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [],
   childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [],
 ) {
+  const idSelector = `#${node.id}`;
   const pseudoCss: CSSRules = {};
 
   const { matchedCSSRules, pseudoElements } = styles;
 
-  iteratePseudo(matchedCSSRules, pseudoCss);
+  iteratePseudo(idSelector, matchedCSSRules, pseudoCss);
   for (const match of pseudoElements) {
     if (isEffectivePseudoElem(match, node)) {
-      iteratePseudo(match.matches, pseudoCss);
+      iteratePseudo(idSelector, match.matches, pseudoCss);
     }
   }
 
@@ -141,7 +152,7 @@ export function cascadePseudoClass(
       for (const ruleMatch of childrenStyleAfter[i].matchedCSSRules) {
         if (!serializedRuleSet.has(JSON.stringify(ruleMatch))) {
           // TODO: parse selector to determine pseudo class
-          const suffix = `:hover > #${node.children[i].id}`;
+          const suffix = `${idSelector}:hover > #${node.children[i].id}`;
           parseCSSProperties(
             ruleMatch.rule.style.cssProperties,
             ruleMatch.rule.style.cssText,

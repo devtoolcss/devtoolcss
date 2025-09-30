@@ -1,21 +1,13 @@
-import postcss from "postcss";
 import { postcssVarReplace } from "postcss-var-replace";
+import postcss from "postcss";
 
-export const pseudoClasses = [
-  "active",
-  "hover",
-  "focus",
-  "checked",
-  "enabled",
-  "disabled",
-  "focus-within",
-  "autofill",
-  "target",
-  "valid",
-];
-
-// prettier-ignore
-export const pseudoElements = ["first-line"," first-letter"," checkmark"," before"," after"," picker-icon"," interest-hint"," marker"," backdrop"," column"," selection"," search-text"," target-text"," spelling-error"," grammar-error"," highlight"," first-line-inherited"," scroll-marker"," scroll-marker-group"," scroll-button"," scrollbar"," scrollbar-thumb"," scrollbar-button"," scrollbar-track"," scrollbar-track-piece"," scrollbar-corner"," resizer"," input-list-button"," view-transition"," view-transition-group"," view-transition-image-pair"," view-transition-group-children"," view-transition-old"," view-transition-new"," placeholder"," file-selector-button"," details-content"," picker"," permission-icon"]
+import type { PseudoElement, PseudoSelector, Selector } from "css-what";
+import type {
+  Node,
+  PseudoElementMatches,
+  CSSRules,
+  CSSProperty,
+} from "./types.js";
 
 export const separators = [
   "child",
@@ -26,7 +18,10 @@ export const separators = [
   "column-combinator",
 ];
 
-export function isEffectivePseudoElem(pseudoMatch, node) {
+export function isEffectivePseudoElem(
+  pseudoMatch: PseudoElementMatches,
+  node: Node,
+): boolean {
   const pseudoType = pseudoMatch.pseudoType;
   if (pseudoType === "before" || pseudoType === "after") {
     let content = '""';
@@ -45,14 +40,11 @@ export function isEffectivePseudoElem(pseudoMatch, node) {
   if (pseudoType === "marker") {
     return node.localName === "LI";
   }
-  if (pseudoType === "placeholder") {
-    return ["INPUT", "TEXTAREA"].includes(node.localName);
-  }
 
   return true;
 }
 
-export function hasPseudoClass(parsedSelector) {
+export function hasPseudoClass(parsedSelector: Selector[]): boolean {
   return parsedSelector.some((node) => node.type === "pseudo");
 }
 
@@ -65,17 +57,20 @@ export function hasPseudoClass(parsedSelector) {
 
 //A pseudo-element must appear after all the other components in the complex or compound selector.
 
-export function getNormalizedSuffix(parsedSelector) {
+export function getNormalizedSuffix(parsedSelector: Selector[]): string {
   const pseudoClasses = [];
   let pseudoElement = null;
   for (let i = parsedSelector.length - 1; i >= 0; --i) {
     if (parsedSelector[i].type === "pseudo") {
-      if (!parsedSelector[i].data) {
+      // type to PseudoSelector
+      const pseudo = parsedSelector[i] as PseudoSelector;
+      if (!pseudo.data) {
         // exclude functional pseudo-classes
-        pseudoClasses.push(":" + parsedSelector[i].name);
+        pseudoClasses.push(":" + pseudo.name);
       }
     } else if (parsedSelector[i].type === "pseudo-element") {
-      pseudoElement = "::" + parsedSelector[i].name;
+      // type to PseudoElement
+      pseudoElement = "::" + (parsedSelector[i] as PseudoElement).name;
     } else {
       break;
     }
@@ -85,9 +80,9 @@ export function getNormalizedSuffix(parsedSelector) {
 }
 
 export function parseCSSProperties(
-  cssProperties,
+  cssProperties: CSSProperty[],
   cssText: string,
-  css,
+  css: CSSRules[string],
   variableOnly = false,
 ) {
   for (const prop of cssProperties) {
@@ -100,7 +95,7 @@ export function parseCSSProperties(
     // longhandProperties not exist if first arg is var
     // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
 
-    prop.explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
+    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
 
     if (prop.disabled || prop.parsedOk === false) {
       // disable: commented property
@@ -112,21 +107,27 @@ export function parseCSSProperties(
       !css[prop.name] ||
       (!(css[prop.name].important && !prop.important) &&
         // handle followed dup (bug?) without range (implicit)
-        !(css[prop.name].value === prop.value && !prop.explicit))
+        !(css[prop.name].value === prop.value && !explicit))
     ) {
       if (!variableOnly || (variableOnly && prop.name.startsWith("--"))) {
         css[prop.name] = {
           value: prop.value,
           important: Boolean(prop.important),
-          explicit: prop.explicit, //!longhandProperties.has(prop.name), //prop.explicit,
+          explicit: explicit, //!longhandProperties.has(prop.name), //prop.explicit,
         };
       }
     }
   }
 }
-export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
+
+// if have media than cannot convert back to JSON
+export function toStyleSheet(
+  styleJSON: CSSRules,
+  mediaMinWidth: number | undefined = undefined,
+  mediaMaxWidth: number | undefined = undefined,
+) {
   let stylesheet = "";
-  for (const [selector, rules] of Object.entries(css)) {
+  for (const [selector, rules] of Object.entries(styleJSON)) {
     const decls = Object.entries(rules)
       .map(
         ([prop, val]) =>
@@ -153,7 +154,7 @@ export function toStyleSheet(css, mediaMinWidth = null, mediaMaxWidth = null) {
   return stylesheet;
 }
 
-export function replaceVariables(styleSheet) {
+export function replaceVariables(styleSheet: string): string {
   const { css: cssReplaced } = postcss([postcssVarReplace()]).process(
     styleSheet,
   );
@@ -194,9 +195,9 @@ export function replaceVariables(styleSheet) {
   return mergedRoot.toString();
 }
 
-export function toStyleJSON(styleSheet) {
+export function toStyleJSON(styleSheet: string): CSSRules {
   const root = postcss.parse(styleSheet);
-  const result = {};
+  const result: CSSRules = {};
 
   root.walkRules((rule) => {
     const selector = rule.selector;

@@ -1,0 +1,27 @@
+{
+  "name": "@clonecss/cleanclone-core",
+  "private": true,
+  "version": "0.0.0",
+  "description": "",
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "module": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "css-what": "^7.0.0",
+    "postcss": "^8.5.6",
+    "postcss-var-replace": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome-remote-interface": "^0.31.14"
+  }
+}
