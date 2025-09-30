@@ -29,6 +29,7 @@ import {
   selectPageLinks,
 } from "./url.js";
 import { JSDOM } from "jsdom";
+import beautify from "js-beautify";
 
 export interface CrawlConfig {
   url: string;
@@ -907,6 +908,11 @@ export class Crawler extends EventEmitter {
     let outerHTML =
       "<!DOCTYPE html>\n" +
       rewriteResourceLinks(origin, pageBase, resources, rawHtml);
+    outerHTML = beautify.html(outerHTML, {
+      indent_size: 2,
+      wrap_line_length: 0, // disable line wrapping
+      wrap_attributes: "auto", // "auto" | "force" | "force-aligned" | "force-expand-multiline"
+    });
     fs.mkdirSync(htmlDir, { recursive: true });
     fs.writeFileSync(htmlPath, outerHTML, "utf-8");
 
