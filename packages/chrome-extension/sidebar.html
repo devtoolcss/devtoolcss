@@ -1,7 +1,6 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
-    <title>Export Element</title>
     <style>
       body {
         font-family: sans-serif;
@@ -13,9 +12,33 @@
     </style>
   </head>
   <body>
-    <h2>Export Element</h2>
     <button id="exportBtn">Export Selected Element</button>
-    <pre id="output"></pre>
     <script type="module" src="sidebar.js"></script>
+    <div style="display: flex; gap: 20px">
+      <div style="flex: 1">
+        <h3>Source Code</h3>
+        <textarea
+          id="sourceCode"
+          style="
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+          "
+        ></textarea>
+      </div>
+      <div style="flex: 1">
+        <h3>Preview</h3>
+        <iframe
+          id="previewFrame"
+          style="
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+          "
+        ></iframe>
+      </div>
+    </div>
   </body>
 </html>

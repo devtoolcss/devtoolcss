@@ -5,9 +5,13 @@
   "author": "",
   "type": "module",
   "devDependencies": {
-    "@types/chrome": "^0.1.12"
+    "@types/chrome": "^0.1.12",
+    "esbuild": "0.25.10"
   },
   "dependencies": {
     "@clonecss/cleanclone-core": "file:../core"
+  },
+  "scripts": {
+    "build": "bash copy.sh && esbuild sidebar.js --bundle --sourcemap --outfile=./dist/sidebar.js"
   }
 }
