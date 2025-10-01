@@ -225,6 +225,7 @@ export class Crawler extends EventEmitter {
       },
     });
     this.chrome = await ChromeLauncher.launch({
+      chromePath: this.cfg.browserPath,
       port: 9222,
       chromeFlags: args,
       maxConnectionRetries: 5,
