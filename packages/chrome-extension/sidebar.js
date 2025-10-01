@@ -396,9 +396,6 @@ async function getChildren(node) {
       // must set DOCTYPE otherwise svg without xmlns will not render
       iframe.srcdoc = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
 
-      const sourceCode = document.getElementById("sourceCode");
-      sourceCode.value = doc.body.innerHTML;
-
       await chrome.debugger.detach(target);
     } catch (e) {
       console.error(e instanceof Error ? e.message + "\n" + e.stack : e);

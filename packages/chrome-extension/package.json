@@ -9,9 +9,10 @@
     "esbuild": "0.25.10"
   },
   "dependencies": {
-    "@clonecss/cleanclone-core": "file:../core"
+    "@clonecss/cleanclone-core": "file:../core",
+    "js-beautify": "^1.15.4"
   },
   "scripts": {
-    "build": "bash copy.sh && esbuild sidebar.js --bundle --sourcemap --outfile=./dist/sidebar.js"
+    "build": "bash copy.sh && esbuild sidebar.js --bundle --sourcemap --outfile=./dist/sidebar.js  && esbuild iframeCtrl.js --bundle --sourcemap --outfile=./dist/iframeCtrl.js"
   }
 }

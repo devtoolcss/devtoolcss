@@ -1,42 +1,158 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script type="module" src="sidebar.js"></script>
+    <script type="module" src="iframeCtrl.js"></script>
     <style>
+      :root {
+        --background: #fff;
+        --text: #1f1f1fff;
+        --border: #d3e3fdff;
+        --primary-text: #fff;
+        --primary: #0b57d0ff;
+        --primary-hover: color-mix(in srgb, var(--primary) 90%, #fdfcfb 10%);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #282828ff;
+          --text: #e3e3e3ff;
+          --border: #5e5e5eff;
+          --primary-text: #062e6fff;
+          --primary: #a8c7faff;
+          --primary-hover: color-mix(in srgb, var(--primary) 90%, #fdfcfb 10%);
+        }
+
+        * {
+          scrollbar-color: #9f9f9f #2c2c2c;
+        }
+
+        /* somehow not working in devtool
+        ::-webkit-scrollbar-track {
+          background: #2c2c2c;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #9f9f9f;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #d1d1d1;
+        }
+        */
+      }
+
       body {
-        font-family: sans-serif;
-        margin: 10px;
+        background-color: var(--background);
+        color: var(--text);
+        margin: 20px;
+        font-family: "Google Sans Text", "Google Sans", system-ui, sans-serif;
       }
       button {
-        margin-top: 10px;
+        background-color: var(--primary);
+        color: var(--primary-text);
+        border: 1px solid var(--primary);
+        border-radius: 9999px;
+        padding: 4px 16px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: var(--primary-hover);
+      }
+      h3 {
+        font-weight: 500;
+        margin: 0;
+      }
+
+      input,
+      textarea {
+        color: var(--text);
+        background-color: var(--background);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+      }
+      input:focus,
+      textarea:focus {
+        box-shadow: 0 0 0 2px var(--primary);
+        outline: 1px solid var(--primary);
       }
     </style>
   </head>
+
   <body>
-    <button id="exportBtn">Export Selected Element</button>
-    <script type="module" src="sidebar.js"></script>
-    <div style="display: flex; gap: 20px">
-      <div style="flex: 1">
-        <h3>Source Code</h3>
-        <textarea
-          id="sourceCode"
-          style="
-            background: #f4f4f4;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-          "
-        ></textarea>
-      </div>
-      <div style="flex: 1">
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%">
+      <button
+        id="exportBtn"
+        style="align-self: flex-start; font-size: 16px; line-height: 20px"
+      >
+        Export $0
+      </button>
+      <textarea
+        id="copyTextArea"
+        readonly
+        style="width: 100%; resize: none"
+        rows="3"
+      ></textarea>
+    </div>
+    <div style="margin-top: 20px">
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          margin-bottom: 10px;
+        "
+      >
         <h3>Preview</h3>
+        <span>
+          Width:
+          <input
+            type="number"
+            id="previewWidthInput"
+            value="500"
+            step="50"
+            min="0"
+            style="width: 50px; margin-right: 2px"
+          />px
+        </span>
+        <span>
+          Height:
+          <input
+            type="number"
+            id="previewHeightInput"
+            value="300"
+            step="50"
+            min="0"
+            style="width: 50px; margin-right: 2px"
+          />px
+        </span>
+        <span>
+          Scale:
+          <input
+            type="number"
+            id="scale"
+            value="1"
+            step="0.1"
+            min="0.1"
+            style="width: 50px"
+          />
+        </span>
+      </div>
+      <div
+        id="iframeContainer"
+        style="
+          overflow: auto;
+          resize: both;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          transform-origin: top left;
+          width: 500px;
+          height: 300px;
+        "
+      >
         <iframe
           id="previewFrame"
-          style="
-            width: 100%;
-            height: 300px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-          "
+          style="width: 100%; height: 100%; display: block"
         ></iframe>
       </div>
     </div>
