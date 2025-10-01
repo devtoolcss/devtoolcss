@@ -393,10 +393,8 @@ async function getChildren(node) {
 
       const doc = await clone(node);
       const iframe = document.getElementById("previewFrame");
-      iframe.contentDocument.replaceChild(
-        iframe.contentDocument.importNode(doc.documentElement, true),
-        iframe.contentDocument.documentElement,
-      );
+      // must set DOCTYPE otherwise svg without xmlns will not render
+      iframe.srcdoc = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
 
       const sourceCode = document.getElementById("sourceCode");
       sourceCode.value = doc.body.innerHTML;
