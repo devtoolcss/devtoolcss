@@ -9,7 +9,10 @@ export function getUniqueSelector(element) {
       return "body";
     }
     let selector = element.tagName.toLowerCase();
-    if (element.className) {
+    if (
+      element.className instanceof String &&
+      element.className.trim() !== ""
+    ) {
       selector += `.${element.className.replace(/ /g, ".")}`;
     }
     let siblings = Array.from(element.parentNode.children);
