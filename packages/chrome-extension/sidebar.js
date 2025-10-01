@@ -24,7 +24,6 @@ async function getChildren(node) {
     // if no children to request, also good
     const timeoutId = setTimeout(() => {
       chrome.debugger.onEvent.addListener(handler);
-      console.log("No children");
       resolve();
     }, 500);
 
@@ -80,7 +79,8 @@ async function getChildren(node) {
 
       await chrome.debugger.detach(target);
     } catch (e) {
-      console.error(e.message + "\n" + e.stack);
+      console.error(e instanceof Error ? e.message + "\n" + e.stack : e);
+      await chrome.debugger.detach(target);
     }
   };
 })();
