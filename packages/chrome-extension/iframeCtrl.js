@@ -52,6 +52,7 @@ function observeIframeBody() {
     childList: true,
     subtree: true,
     characterData: true,
+    attributes: true,
   });
 }
 
