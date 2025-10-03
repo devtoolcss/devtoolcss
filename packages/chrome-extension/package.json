@@ -6,6 +6,7 @@
   "type": "module",
   "devDependencies": {
     "@types/chrome": "^0.1.12",
+    "chokidar": "^4.0.3",
     "esbuild": "0.25.10"
   },
   "dependencies": {
@@ -14,6 +15,7 @@
     "js-beautify": "^1.15.4"
   },
   "scripts": {
-    "build": "bash copy.sh && esbuild sidebar.js --bundle --sourcemap --outfile=./dist/sidebar.js  && esbuild iframeCtrl.js --bundle --sourcemap --outfile=./dist/iframeCtrl.js"
+    "build": "bash copy.sh && node esbuild.config.js",
+    "watch": "node watch.js"
   }
 }
