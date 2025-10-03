@@ -361,9 +361,12 @@ async function getChildren(node) {
   await childrenPromise;
 }
 
+const exportBtn = document.getElementById("exportBtn");
+
 (async () => {
-  document.getElementById("exportBtn").onclick = async function () {
+  exportBtn.onclick = async function () {
     // initialize CDP
+    exportBtn.disabled = true;
     try {
       await chrome.debugger.attach(target, "1.3");
       await chrome.debugger.sendCommand(target, "DOM.enable");
@@ -401,5 +404,6 @@ async function getChildren(node) {
       console.error(e instanceof Error ? e.message + "\n" + e.stack : e);
       await chrome.debugger.detach(target);
     }
+    exportBtn.disabled = false;
   };
 })();

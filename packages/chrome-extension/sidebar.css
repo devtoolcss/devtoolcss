@@ -52,6 +52,13 @@ button {
 button:hover {
   background: var(--primary-hover);
 }
+button:disabled {
+  background-color: rgb(228 228 288); /* rgb (31 31 31 / 12%) */
+  color: gray;
+  border: 1px solid rgb(228 228 288);
+  pointer-events: none;
+  cursor: not-allowed;
+}
 h3 {
   font-weight: 500;
   margin: 0;
