@@ -116,8 +116,9 @@ function iteratePseudo(
     for (const selector of matchingSelectors) {
       const parsedSelector = CSSwhat.parse(selector)[0];
       if (hasPseudoClass(parsedSelector)) {
-        const selector = idSelector + getNormalizedSuffix(parsedSelector);
-        if (!selector) continue;
+        const suffix = getNormalizedSuffix(parsedSelector);
+        if (!suffix) continue;
+        const selector = idSelector + suffix;
         parseCSSProperties(
           rule.rule.style.cssProperties,
           rule.rule.style.cssText,
