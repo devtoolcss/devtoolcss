@@ -20,12 +20,20 @@
 
   <body>
     <div style="display: flex; flex-direction: column; gap: 10px; width: 100%">
-      <button
-        id="exportBtn"
-        style="align-self: flex-start; font-size: 12px; line-height: 16px"
-      >
-        Export $0
-      </button>
+      <div style="display: flex; align-items: center; gap: 10px; width: 100%">
+        <button id="exportBtn" style="font-size: 12px; line-height: 16px">
+          Export $0
+        </button>
+        <div id="exportProgressContainer" style="display: none">
+          <progress
+            id="exportProgressBar"
+            value="0"
+            max="100"
+            style="width: 128px"
+          ></progress>
+          <span id="exportProgressText" style="font-size: 12px"></span>
+        </div>
+      </div>
       <pre
         style="height: 150px; overflow: auto; resize: vertical"
       ><code id="copyCodeArea" class="language-html"></code></pre>

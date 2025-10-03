@@ -28,6 +28,23 @@ const pseudoClasses = [
 
 const target = { tabId: chrome.devtools.inspectedWindow.tabId };
 const iframe = document.getElementById("previewFrame");
+const progressBarContainer = document.getElementById("exportProgressContainer");
+const progressBar = document.getElementById("exportProgressBar");
+const progressText = document.getElementById("exportProgressText");
+
+function updateProgress(value, max = undefined) {
+  progressBar.value = value;
+  if (max !== undefined) progressBar.max = max;
+  progressText.textContent = `${progressBar.value} / ${progressBar.max}`;
+}
+
+function showProgress() {
+  progressBarContainer.style.display = "block";
+}
+
+function hideProgress() {
+  progressBarContainer.style.display = "none";
+}
 
 function inspectedWindowEval(f, argStr) {
   return new Promise((resolve, reject) =>
@@ -215,7 +232,8 @@ async function clone(root) {
   };
   await traverse(root, initElements, console.error, true);
 
-  let processed = 0;
+  updateProgress(0, 2 * totalElements);
+
   await traverse(
     root,
     async (node) => {
@@ -230,7 +248,7 @@ async function clone(root) {
         ...node.css[deviceIndex],
         ...cascade(node, styles),
       };
-      processed += 1;
+      updateProgress(progressBar.value + 1);
     },
     console.error,
     true,
@@ -243,7 +261,6 @@ async function clone(root) {
       checkChildrenNodeIds.add(Number(el.attributes["data-nodeId"].value));
     });
   } catch {}
-  processed = 0;
   await traverse(
     root,
     async (node) => {
@@ -316,7 +333,7 @@ async function clone(root) {
       };
       //console.log("node.css", node.css[i]);
 
-      processed += 1;
+      updateProgress(progressBar.value + 1);
     },
     console.error,
     false,
@@ -391,6 +408,9 @@ const exportBtn = document.getElementById("exportBtn");
   exportBtn.onclick = async function () {
     // initialize CDP
     exportBtn.disabled = true;
+    updateProgress(0, 1);
+    showProgress();
+    iframe.contentDocument.body.innerHTML = "";
     try {
       await chrome.debugger.attach(target, "1.3");
       await chrome.debugger.sendCommand(target, "DOM.enable");
@@ -429,5 +449,6 @@ const exportBtn = document.getElementById("exportBtn");
       await chrome.debugger.detach(target);
     }
     exportBtn.disabled = false;
+    hideProgress();
   };
 })();
