@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="devtool-code-light.css"
+      media="(prefers-color-scheme: light)"
+    />
+    <link
+      rel="stylesheet"
+      href="devtool-code-dark.css"
+      media="(prefers-color-scheme: dark)"
+    />
     <script type="module" src="sidebar.js"></script>
     <script type="module" src="iframeCtrl.js"></script>
     <style>
@@ -87,12 +97,9 @@
       >
         Export $0
       </button>
-      <textarea
-        id="copyTextArea"
-        readonly
-        style="width: 100%; resize: none"
-        rows="3"
-      ></textarea>
+      <pre
+        style="height: 150px; overflow: auto; resize: vertical"
+      ><code id="copyCodeArea" class="language-html"></code></pre>
     </div>
     <div style="margin-top: 20px">
       <div

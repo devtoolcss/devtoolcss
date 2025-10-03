@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@clonecss/cleanclone-core": "file:../core",
+    "highlight.js": "^11.11.1",
     "js-beautify": "^1.15.4"
   },
   "scripts": {

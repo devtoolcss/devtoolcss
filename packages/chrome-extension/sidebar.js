@@ -14,6 +14,7 @@ import {
 import { getUniqueSelector } from "./selector.js";
 
 const target = { tabId: chrome.devtools.inspectedWindow.tabId };
+const iframe = document.getElementById("previewFrame");
 
 function inspectedWindowEval(f, argStr) {
   return new Promise((resolve, reject) =>
@@ -392,9 +393,8 @@ async function getChildren(node) {
       await getChildren(node);
 
       const doc = await clone(node);
-      const iframe = document.getElementById("previewFrame");
       // must set DOCTYPE otherwise svg without xmlns will not render
-      iframe.srcdoc = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+      iframe.contentDocument.body.innerHTML = doc.body.innerHTML;
 
       await chrome.debugger.detach(target);
     } catch (e) {

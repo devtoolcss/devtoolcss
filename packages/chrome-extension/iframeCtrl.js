@@ -1,4 +1,9 @@
 import beautify from "js-beautify";
+import hljs from "highlight.js/lib/core";
+import xml from "highlight.js/lib/languages/xml";
+
+// Then register the languages you need
+hljs.registerLanguage("html", xml);
 
 const beautifyConfig = {
   indent_size: 2,
@@ -34,18 +39,32 @@ scaleInput.addEventListener(
 );
 
 // keep update the html to copy
-const copyTextArea = document.getElementById("copyTextArea");
+const copyCodeArea = document.getElementById("copyCodeArea");
+
+// click to select all
+copyCodeArea.addEventListener("click", function () {
+  const sel = window.getSelection();
+  if (!sel.isCollapsed) return; // only select all if no text is currently selected
+
+  const range = document.createRange();
+  range.selectNodeContents(this);
+  sel.removeAllRanges();
+  sel.addRange(range);
+});
 
 function observeIframeBody() {
   const doc = iframe.contentDocument;
   if (!doc || !doc.body) return;
 
-  // Update initially
-  copyTextArea.value = beautify.html(doc.body.innerHTML, beautifyConfig);
-
   // Set up MutationObserver
   const observer = new MutationObserver(() => {
-    copyTextArea.value = beautify.html(doc.body.innerHTML, beautifyConfig);
+    const highlightedCode = hljs.highlight(
+      beautify.html(doc.body.innerHTML, beautifyConfig),
+      {
+        language: "html",
+      },
+    ).value;
+    copyCodeArea.innerHTML = highlightedCode;
   });
 
   observer.observe(doc.body, {
