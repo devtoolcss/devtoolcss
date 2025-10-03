@@ -25,6 +25,16 @@ function updateIframe() {
 }
 */
 
+function setIframeOnResize() {
+  iframe.contentWindow.onresize = () => {
+    const scale = scaleInput.value === 0 ? 0.01 : scaleInput.value;
+    const containerWidth = iframe.contentWindow.innerWidth / scale;
+    const containerHeight = iframe.contentWindow.innerHeight / scale;
+    widthInput.value = Math.round(containerWidth);
+    heightInput.value = Math.round(containerHeight);
+  };
+}
+
 widthInput.addEventListener(
   "input",
   () => (iframeContainer.style.width = `${widthInput.value}px`),
@@ -78,6 +88,7 @@ function observeIframeBody() {
 // Call this after iframe content loads/updates
 // initial not work somehow
 iframe.addEventListener("load", observeIframeBody);
+iframe.addEventListener("load", setIframeOnResize);
 
 /* not working, require document focus
 document.getElementById("copyHtmlBtn").onclick = async () => {
