@@ -13,6 +13,19 @@ import {
 
 import { getUniqueSelector } from "./selector.js";
 
+const pseudoClasses = [
+  "active",
+  "hover",
+  "focus",
+  "checked",
+  "enabled",
+  "disabled",
+  "focus-within",
+  "autofill",
+  "target",
+  "valid",
+];
+
 const target = { tabId: chrome.devtools.inspectedWindow.tabId };
 const iframe = document.getElementById("previewFrame");
 
@@ -223,7 +236,6 @@ async function clone(root) {
     true,
   );
 
-  /*
   const doc = toDOM(root, true);
   const checkChildrenNodeIds = new Set();
   try {
@@ -245,33 +257,46 @@ async function clone(root) {
         // use for loop to await, forEach will not
         for (let i = 0; i < node.children.length; ++i) {
           const child = node.children[i];
-          const childrenStyle = await CSS.getMatchedStylesForNode({
-            nodeId: child.nodeId,
-          });
+
+          const childrenStyle = await chrome.debugger.sendCommand(
+            target,
+            "CSS.getMatchedStylesForNode",
+            {
+              nodeId: child.nodeId,
+            },
+          );
           childrenStyleBefore.push(childrenStyle);
         }
       }
 
-      await CSS.forcePseudoState({
+      await chrome.debugger.sendCommand(target, "CSS.forcePseudoState", {
         nodeId: node.nodeId,
         forcedPseudoClasses: pseudoClasses,
       });
 
-      const styles = await CSS.getMatchedStylesForNode({
-        nodeId: node.nodeId,
-      });
+      const styles = await chrome.debugger.sendCommand(
+        target,
+        "CSS.getMatchedStylesForNode",
+        {
+          nodeId: node.nodeId,
+        },
+      );
 
       if (checkChildren) {
         for (let i = 0; i < node.children.length; ++i) {
           const child = node.children[i];
-          const childrenStyle = await CSS.getMatchedStylesForNode({
-            nodeId: child.nodeId,
-          });
+          const childrenStyle = await chrome.debugger.sendCommand(
+            target,
+            "CSS.getMatchedStylesForNode",
+            {
+              nodeId: child.nodeId,
+            },
+          );
           childrenStyleAfter.push(childrenStyle);
         }
       }
 
-      await CSS.forcePseudoState({
+      await chrome.debugger.sendCommand(target, "CSS.forcePseudoState", {
         nodeId: node.nodeId,
         forcedPseudoClasses: [],
       });
@@ -296,7 +321,6 @@ async function clone(root) {
     console.error,
     false,
   );
-  */
 
   function cleanUp(node) {
     for (const rulesObj of Object.values(node.css || {})) {
@@ -329,9 +353,9 @@ async function clone(root) {
     console.error,
     true,
   );
-  const doc = toDOM(root, false);
-  inlineStyle(doc, "data-css", true);
-  return doc;
+  const finalDoc = toDOM(root, false);
+  inlineStyle(finalDoc, "data-css", true);
+  return finalDoc;
 }
 
 async function getChildren(node) {
