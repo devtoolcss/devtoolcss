@@ -13,80 +13,9 @@
       href="devtool-code-dark.css"
       media="(prefers-color-scheme: dark)"
     />
+    <link rel="stylesheet" href="sidebar.css" />
     <script type="module" src="sidebar.js"></script>
     <script type="module" src="iframeCtrl.js"></script>
-    <style>
-      :root {
-        --background: #fff;
-        --text: #1f1f1fff;
-        --border: #d3e3fdff;
-        --primary-text: #fff;
-        --primary: #0b57d0ff;
-        --primary-hover: color-mix(in srgb, var(--primary) 90%, #fdfcfb 10%);
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --background: #282828ff;
-          --text: #e3e3e3ff;
-          --border: #5e5e5eff;
-          --primary-text: #062e6fff;
-          --primary: #a8c7faff;
-          --primary-hover: color-mix(in srgb, var(--primary) 90%, #fdfcfb 10%);
-        }
-
-        * {
-          scrollbar-color: #9f9f9f #2c2c2c;
-        }
-
-        /* somehow not working in devtool
-        ::-webkit-scrollbar-track {
-          background: #2c2c2c;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #9f9f9f;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #d1d1d1;
-        }
-        */
-      }
-
-      body {
-        background-color: var(--background);
-        color: var(--text);
-        margin: 20px;
-        font-family: "Google Sans Text", "Google Sans", system-ui, sans-serif;
-      }
-      button {
-        background-color: var(--primary);
-        color: var(--primary-text);
-        border: 1px solid var(--primary);
-        border-radius: 9999px;
-        padding: 4px 16px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      button:hover {
-        background: var(--primary-hover);
-      }
-      h3 {
-        font-weight: 500;
-        margin: 0;
-      }
-
-      input,
-      textarea {
-        color: var(--text);
-        background-color: var(--background);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-      }
-      input:focus,
-      textarea:focus {
-        box-shadow: 0 0 0 2px var(--primary);
-        outline: 1px solid var(--primary);
-      }
-    </style>
   </head>
 
   <body>
