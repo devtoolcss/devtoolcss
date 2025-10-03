@@ -3,7 +3,7 @@
 export function getUniqueSelector(element) {
   function getElementSelector(element) {
     if (element.id) {
-      return `#${element.id}`;
+      return `#${element.id.replace(/:/g, "\\:")}`;
     }
     if (element.tagName === "BODY") {
       return "body";
