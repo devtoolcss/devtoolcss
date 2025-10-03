@@ -133,22 +133,18 @@ export function toStyleSheet(
         ([prop, val]) =>
           `${prop}: ${val.value}${val.important ? " !important" : ""};`,
       )
-      .join("\n");
-    stylesheet += `${selector} {\n${decls}\n}\n`;
+      .join("");
+    stylesheet += `${selector} {${decls}}`;
   }
   if (mediaMinWidth || mediaMaxWidth) {
     // Indent each line of the stylesheet
-    const indented = stylesheet
-      .split("\n")
-      .map((line) => (line ? "  " + line : line))
-      .join("\n");
     if (mediaMinWidth && mediaMaxWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) and (width < ${mediaMaxWidth}px) {\n${indented}}\n`;
+      stylesheet = `@media (width >= ${mediaMinWidth}px) and (width < ${mediaMaxWidth}px) {${stylesheet}}`;
     } else if (mediaMinWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) {\n${indented}}\n`;
+      stylesheet = `@media (width >= ${mediaMinWidth}px) {${stylesheet}}`;
     } else {
       // mediaMaxWidth
-      stylesheet = `@media (width < ${mediaMaxWidth}px) {\n${indented}}\n`;
+      stylesheet = `@media (width < ${mediaMaxWidth}px) {${stylesheet}}`;
     }
   }
   return stylesheet;
