@@ -40,7 +40,9 @@ export function inlineStyle(
           "SCRIPT",
           "STYLE",
         ];
-        if (noChildTags.includes(el.tagName)) {
+        if (noChildTags.includes(el.tagName) || el.children.length === 0) {
+          // prevent break :empty for those with no children
+          // still may break :nth-child()
           el.parentNode.insertBefore(styleEl, el);
         } else {
           el.insertBefore(styleEl, el.children[0]);
