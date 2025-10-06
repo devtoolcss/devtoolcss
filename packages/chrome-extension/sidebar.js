@@ -3,7 +3,6 @@
 import {
   traverse,
   cascade,
-  cascadePseudoClass,
   inlineStyle,
   CDPNodeType,
   toStyleSheet,
@@ -232,27 +231,7 @@ async function clone(root) {
   };
   await traverse(root, initElements, console.error, true);
 
-  updateProgress(0, 2 * totalElements);
-
-  await traverse(
-    root,
-    async (node) => {
-      const styles = await chrome.debugger.sendCommand(
-        target,
-        "CSS.getMatchedStylesForNode",
-        {
-          nodeId: node.nodeId,
-        },
-      );
-      node.css[deviceIndex] = {
-        ...node.css[deviceIndex],
-        ...cascade(node, styles),
-      };
-      updateProgress(progressBar.value + 1);
-    },
-    console.error,
-    true,
-  );
+  updateProgress(0, totalElements);
 
   const doc = toDOM(root, true);
   const checkChildrenNodeIds = new Set();
@@ -318,20 +297,12 @@ async function clone(root) {
         forcedPseudoClasses: [],
       });
 
-      const pseudoCss = cascadePseudoClass(
+      node.css[deviceIndex] = cascade(
         node,
         styles,
         childrenStyleBefore,
         childrenStyleAfter,
       );
-
-      //console.log("pseudoCss", pseudoCss);
-
-      node.css[deviceIndex] = {
-        ...node.css[deviceIndex],
-        ...pseudoCss,
-      };
-      //console.log("node.css", node.css[i]);
 
       updateProgress(progressBar.value + 1);
     },

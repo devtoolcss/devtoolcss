@@ -1,5 +1,5 @@
 import {
-  hasPseudoClass,
+  hasNonFuncPseudoClass,
   parseCSSProperties,
   getNormalizedSuffix,
   isEffectivePseudoElem,
@@ -14,17 +14,45 @@ import type {
   GetMatchedStylesForNodeResponse,
 } from "./types.js";
 
+function iterateRules(
+  idSelector: string,
+  rules: RuleMatch[],
+  css: ParsedCSSRules,
+) {
+  for (const rule of rules) {
+    if (rule.rule.origin !== "regular") continue;
+    const matchingSelectors = rule.matchingSelectors.map(
+      (i) => rule.rule.selectorList.selectors[i].text,
+    );
+    for (const matchingSelector of matchingSelectors) {
+      const parsedSelector = CSSwhat.parse(matchingSelector)[0];
+      const suffix = getNormalizedSuffix(parsedSelector);
+
+      if (!suffix && hasNonFuncPseudoClass(parsedSelector))
+        // TODO: probably pseudo class in functional selector
+        // currently cannot process, should not be written in normal css
+        continue;
+
+      const selector = idSelector + suffix;
+      parseCSSProperties(
+        rule.rule.style.cssProperties,
+        rule.rule.style.cssText,
+        (css[selector] = css[selector] || {}),
+      );
+    }
+  }
+}
+
 export function cascade(
   node: NodeWithId,
   styles: GetMatchedStylesForNodeResponse,
+  childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [],
+  childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [],
 ) {
   const idSelector = `#${node.id}`;
   const css: ParsedCSSRules = { [idSelector]: {} };
   const selfStyle = css[idSelector];
 
-  // bottleneck of speed, can take 4s for large css, though mitigated with async
-  // in browser's protocol monitor only takes <50ms, corresponding to cascade total time average
-  //let startTime = Date.now();
   const {
     inherited,
     inlineStyle,
@@ -32,10 +60,6 @@ export function cascade(
     matchedCSSRules,
     pseudoElements,
   } = styles;
-
-  //console.log("getMatchedStylesForNode", Date.now() - startTime);
-
-  // the rest takes <100ms
 
   if (inherited) {
     for (let i = inherited.length - 1; i >= 0; i--) {
@@ -69,14 +93,11 @@ export function cascade(
       selfStyle,
     );
 
-  for (const rule of matchedCSSRules) {
-    if (rule.rule.origin !== "regular") continue;
-
-    parseCSSProperties(
-      rule.rule.style.cssProperties,
-      rule.rule.style.cssText,
-      selfStyle,
-    );
+  iterateRules(idSelector, matchedCSSRules, css);
+  for (const match of pseudoElements) {
+    if (isEffectivePseudoElem(match, node)) {
+      iterateRules(idSelector, match.matches, css);
+    }
   }
 
   if (inlineStyle)
@@ -85,67 +106,6 @@ export function cascade(
       inlineStyle.cssText,
       selfStyle,
     );
-
-  for (const match of pseudoElements) {
-    //match.pseudoType
-    if (isEffectivePseudoElem(match, node)) {
-      for (const rule of match.matches) {
-        if (rule.rule.origin !== "regular") continue;
-        const key = `${idSelector}::${match.pseudoType}`;
-        parseCSSProperties(
-          rule.rule.style.cssProperties,
-          rule.rule.style.cssText,
-          (css[key] = css[key] || {}),
-        );
-      }
-    }
-  }
-  return css;
-}
-
-function iteratePseudo(
-  idSelector: string,
-  rules: RuleMatch[],
-  pseudoCss: ParsedCSSRules,
-) {
-  for (const rule of rules) {
-    if (rule.rule.origin !== "regular") continue;
-    const matchingSelectors = rule.matchingSelectors.map(
-      (i) => rule.rule.selectorList.selectors[i].text,
-    );
-    for (const selector of matchingSelectors) {
-      const parsedSelector = CSSwhat.parse(selector)[0];
-      if (hasPseudoClass(parsedSelector)) {
-        const suffix = getNormalizedSuffix(parsedSelector);
-        if (!suffix) continue;
-        const selector = idSelector + suffix;
-        parseCSSProperties(
-          rule.rule.style.cssProperties,
-          rule.rule.style.cssText,
-          (pseudoCss[selector] = pseudoCss[selector] || {}),
-        );
-      }
-    }
-  }
-}
-
-export function cascadePseudoClass(
-  node: NodeWithId,
-  styles: GetMatchedStylesForNodeResponse,
-  childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [],
-  childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [],
-) {
-  const idSelector = `#${node.id}`;
-  const pseudoCss: ParsedCSSRules = {};
-
-  const { matchedCSSRules, pseudoElements } = styles;
-
-  iteratePseudo(idSelector, matchedCSSRules, pseudoCss);
-  for (const match of pseudoElements) {
-    if (isEffectivePseudoElem(match, node)) {
-      iteratePseudo(idSelector, match.matches, pseudoCss);
-    }
-  }
 
   if (childrenStyleBefore.length > 0 && childrenStyleAfter.length > 0) {
     for (let i = 0; i < node.children.length; ++i) {
@@ -160,12 +120,12 @@ export function cascadePseudoClass(
           parseCSSProperties(
             ruleMatch.rule.style.cssProperties,
             ruleMatch.rule.style.cssText,
-            (pseudoCss[suffix] = pseudoCss[suffix] || {}),
+            (css[suffix] = css[suffix] || {}),
           );
         }
       }
     }
   }
 
-  return pseudoCss;
+  return css;
 }

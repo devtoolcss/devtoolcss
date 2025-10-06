@@ -44,8 +44,19 @@ export function isEffectivePseudoElem(
   return true;
 }
 
-export function hasPseudoClass(parsedSelector: Selector[]): boolean {
-  return parsedSelector.some((node) => node.type === "pseudo");
+export function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
+  for (const node of parsedSelector) {
+    if (node.type === "pseudo") {
+      if (!node.data) return true;
+
+      if (Array.isArray(node.data) && node.name !== "not") {
+        for (const selector of node.data) {
+          if (hasNonFuncPseudoClass(selector)) return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**

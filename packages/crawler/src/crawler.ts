@@ -5,7 +5,6 @@ import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
 import {
   cascade,
-  cascadePseudoClass,
   toStyleSheet,
   replaceVariables,
   toStyleJSON,
@@ -77,7 +76,6 @@ export const pseudoClasses = [
 export enum CrawlStages {
   Load = 0,
   Cascade = 1,
-  CascadePseudo = 2,
 }
 
 export interface CrawlProgress {
@@ -712,36 +710,6 @@ export class Crawler extends EventEmitter {
 
       const dom = this.toJSDOM(root, true);
 
-      let processed = 0;
-      await traverse(
-        root,
-        async (node) => {
-          if (this.toHighlight) {
-            await highlightNode(node, DOM, Runtime, Overlay);
-          }
-          const styles = await CSS.getMatchedStylesForNode({
-            nodeId: node.nodeId,
-          });
-          node.css[deviceIndex] = {
-            ...node.css[deviceIndex],
-            ...cascade(node, styles),
-          };
-          processed += 1;
-          this.emitProgress({
-            crawlProgress: {
-              stageIndex: CrawlStages.Cascade,
-              totalElements,
-              processedElements: processed,
-            },
-          });
-          if (this.toHighlight) {
-            setTimeout(() => Overlay.hideHighlight(), 25);
-          }
-        },
-        this.onError,
-        !this.toHighlight,
-      );
-
       const checkChildrenNodeIds = new Set<number>();
       try {
         dom.window.document
@@ -752,14 +720,13 @@ export class Crawler extends EventEmitter {
             );
           });
       } catch {}
-      processed = 0;
+
+      let processed = 0;
       await traverse(
         root,
         async (node) => {
           if (this.toHighlight) {
-            await highlightNode(node, DOM, Runtime, Overlay, {
-              showOverlay: false,
-            });
+            await highlightNode(node, DOM, Runtime, Overlay);
           }
 
           // collect styles
@@ -803,29 +770,25 @@ export class Crawler extends EventEmitter {
             forcedPseudoClasses: [],
           });
 
-          const pseudoCss = cascadePseudoClass(
+          node.css[deviceIndex] = cascade(
             node,
             styles,
             childrenStyleBefore,
             childrenStyleAfter,
           );
 
-          //console.log("pseudoCss", pseudoCss);
-
-          node.css[deviceIndex] = {
-            ...node.css[deviceIndex],
-            ...pseudoCss,
-          };
-          //console.log("node.css", node.css[i]);
-
           processed += 1;
           this.emitProgress({
             crawlProgress: {
-              stageIndex: CrawlStages.CascadePseudo,
+              stageIndex: CrawlStages.Cascade,
               totalElements,
               processedElements: processed,
             },
           });
+
+          if (this.toHighlight) {
+            setTimeout(() => Overlay.hideHighlight(), 25);
+          }
         },
         this.onError,
         false,

@@ -102,11 +102,7 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
   }, [cfg, exit]);
 
   // UI helpers
-  const stageTexts: Array<NonNullable<string>> = [
-    "Load",
-    "Cascade",
-    "Cascade Pseudo",
-  ];
+  const stageTexts: Array<NonNullable<string>> = ["Load", "Cascade"];
 
   const devices = useMemo(
     () => cfg.deviceWidths.map((w, i) => ({ index: i, width: w })),
@@ -215,8 +211,8 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
                     d.index < activeDeviceIndex
                       ? "green"
                       : d.index === activeDeviceIndex
-                        ? "black"
-                        : "gray"
+                      ? "black"
+                      : "gray"
                   }
                 >
                   {` ${d.width}px `}
@@ -229,8 +225,8 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
                 const color = isActive
                   ? ""
                   : (currentStageIndex ?? -1) > i
-                    ? "green"
-                    : "gray";
+                  ? "green"
+                  : "gray";
                 const decoL = isActive ? "▶" : "";
                 return (
                   <Box key={stgText} marginRight={2}>
@@ -242,8 +238,7 @@ const Dashboard: React.FC<{ cfg: CrawlConfig }> = ({ cfg }) => {
               })}
             </Box>
             {elementsProgressPercent !== undefined &&
-              (currentStageIndex === CrawlStages.Cascade ||
-                currentStageIndex === CrawlStages.CascadePseudo) && (
+              currentStageIndex === CrawlStages.Cascade && (
                 <Box paddingLeft={2}>
                   <Text>
                     {stageTexts[currentStageIndex]} |{" "}
