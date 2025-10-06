@@ -37,7 +37,7 @@ export function getUniqueSelector(element) {
   let parent = element.parentElement;
   while (parent) {
     if (parent.id) {
-      let parentSelector = `#${parent.id} ${selector}`;
+      let parentSelector = `#${parent.id.replace(/:/g, "\\:")} ${selector}`;
       elements = document.querySelectorAll(parentSelector);
       if (elements.length === 1) {
         return parentSelector;
