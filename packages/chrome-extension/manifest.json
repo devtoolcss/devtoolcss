@@ -6,6 +6,9 @@
   "permissions": ["activeTab", "debugger"],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools.html",
+  "icons": {
+    "128": "icons/128.png"
+  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
