@@ -8,22 +8,10 @@ import {
   toStyleSheet,
   toStyleJSON,
   replaceVariables,
+  forciblePseudoClasses,
 } from "@clonecss/cleanclone-core";
 
 import { getUniqueSelector } from "./selector.js";
-
-const pseudoClasses = [
-  "active",
-  "hover",
-  "focus",
-  "checked",
-  "enabled",
-  "disabled",
-  "focus-within",
-  "autofill",
-  "target",
-  "valid",
-];
 
 const target = { tabId: chrome.devtools.inspectedWindow.tabId };
 const iframe = document.getElementById("previewFrame");
@@ -267,7 +255,7 @@ async function clone(root) {
 
       await chrome.debugger.sendCommand(target, "CSS.forcePseudoState", {
         nodeId: node.nodeId,
-        forcedPseudoClasses: pseudoClasses,
+        forcedPseudoClasses: forciblePseudoClasses,
       });
 
       const styles = await chrome.debugger.sendCommand(

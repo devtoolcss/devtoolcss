@@ -1,3 +1,33 @@
+export const forciblePseudoClasses = [
+  "hover",
+  "active",
+  "focus",
+  "focus-visible",
+  "focus-within",
+  "checked",
+  "indeterminate",
+  "target",
+  "enabled",
+  "disabled",
+  "valid",
+  "invalid",
+  "required",
+  "optional",
+  "read-only",
+  "read-write",
+  "placeholder-shown",
+  "user-invalid",
+];
+
+export const separators = [
+  "child",
+  "parent",
+  "sibling",
+  "adjacent",
+  "descendant",
+  "column-combinator",
+];
+
 export enum CDPNodeType {
   ELEMENT_NODE = 1,
   //ATTRIBUTE_NODE = 2,

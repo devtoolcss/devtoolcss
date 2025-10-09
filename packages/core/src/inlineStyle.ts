@@ -16,6 +16,7 @@ export function inlineStyle(
 
         const styleEl = document.createElement("style");
         styleEl.textContent = cssText;
+        // keep here for stringify and eval
         const noChildTags = [
           // void elements
           // https://developer.mozilla.org/en-US/docs/Glossary/Void_element

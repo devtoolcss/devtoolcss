@@ -9,15 +9,6 @@ import type {
   CSSProperty,
 } from "./types.js";
 
-export const separators = [
-  "child",
-  "parent",
-  "sibling",
-  "adjacent",
-  "descendant",
-  "column-combinator",
-];
-
 export function isEffectivePseudoElem(
   pseudoMatch: PseudoElementMatches,
   node: NodeWithId,
@@ -103,8 +94,12 @@ export function parseCSSProperties(
       prop.value = prop.value.replace(/\s*!important\s*$/, "");
     }
 
-    // longhandProperties not exist if first arg is var
+    // .longhandProperties not exist if first arg is var
     // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
+    // This is by blink's design, devtool also manually check it
+    // https://github.com/ChromeDevTools/devtools-frontend/blob/f806ee3b25e02a31b71de20227a3b36b453bd695/front_end/core/sdk/CSSProperty.ts#L75
+    // Current behavior will return all long-hands in CSSProperty, so we don't build lookup table,
+    // but directly check whether it is in declared in cssText
 
     const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
 

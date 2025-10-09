@@ -11,6 +11,7 @@ import {
   traverse,
   CDPNodeType,
   inlineStyle,
+  forciblePseudoClasses,
 } from "@clonecss/cleanclone-core";
 import type {
   Node,
@@ -59,19 +60,6 @@ export interface CrawlConfig {
   debug: boolean;
   overlay: boolean;
 }
-
-export const pseudoClasses = [
-  "active",
-  "hover",
-  "focus",
-  "checked",
-  "enabled",
-  "disabled",
-  "focus-within",
-  "autofill",
-  "target",
-  "valid",
-];
 
 export enum CrawlStages {
   Load = 0,
@@ -748,7 +736,7 @@ export class Crawler extends EventEmitter {
 
           await CSS.forcePseudoState({
             nodeId: node.nodeId,
-            forcedPseudoClasses: pseudoClasses,
+            forcedPseudoClasses: forciblePseudoClasses,
           });
 
           const styles = await CSS.getMatchedStylesForNode({
