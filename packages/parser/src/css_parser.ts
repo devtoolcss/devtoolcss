@@ -1,63 +1,20 @@
 import { postcssVarReplace } from "postcss-var-replace";
 import postcss from "postcss";
 
-import type { PseudoElement, PseudoSelector, Selector } from "css-what";
 import type {
-  NodeWithId,
-  PseudoElementMatches,
   ParsedCSSRules,
-  CSSProperty,
+  RuleMatch,
+  CSSStyle,
+  ParsedCSSPropertyValue,
+  GetMatchedStylesForNodeResponse,
+  ParsedCSS,
+  AppliedCSSProperty,
 } from "./types.js";
 
-export function isEffectivePseudoElem(
-  pseudoMatch: PseudoElementMatches,
-  node: NodeWithId,
-): boolean {
-  const pseudoType = pseudoMatch.pseudoType;
-  if (pseudoType === "before" || pseudoType === "after") {
-    let content = '""';
-    for (const match of pseudoMatch.matches) {
-      for (const prop of match.rule.style.cssProperties) {
-        if (prop.name === "content") content = prop.value;
-      }
-    }
-    /*
-    if (content !== '""' && content !== "''")
-      console.log(JSON.stringify(content));
-    */
-    return content !== "normal" && content !== '""' && content !== "''";
-  }
+import { inheritableProperties } from "./constants.js";
 
-  if (pseudoType === "marker") {
-    return node.localName === "LI";
-  }
-
-  return true;
-}
-
-export function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
-  for (const node of parsedSelector) {
-    if (node.type === "pseudo") {
-      if (!node.data) return true;
-
-      if (Array.isArray(node.data) && node.name !== "not") {
-        for (const selector of node.data) {
-          if (hasNonFuncPseudoClass(selector)) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Normalize the pseudo-class/element suffix:
- * - Removes functional pseudo-classes (e.g. :not(), :nth-child())
- * - Sorts pseudo-classes/elements alphabetically
- * - Keeps only the pseudo part (e.g. ":hover", "::before")
- */
-
-//A pseudo-element must appear after all the other components in the complex or compound selector.
+import type { PseudoElement, PseudoSelector, Selector } from "css-what";
+import * as CSSwhat from "css-what";
 
 export function getNormalizedSuffix(parsedSelector: Selector[]): string {
   const pseudoClasses = [];
@@ -81,18 +38,28 @@ export function getNormalizedSuffix(parsedSelector: Selector[]): string {
   return pseudoClasses.join("") + (pseudoElement ? pseudoElement : "");
 }
 
+function isInheritableProperty(propName: string): boolean {
+  return propName.startsWith("--") || inheritableProperties.includes(propName);
+}
+
 export function parseCSSProperties(
-  cssProperties: CSSProperty[],
-  cssText: string,
-  css: ParsedCSSRules[string],
-  variableOnly = false,
-) {
-  for (const prop of cssProperties) {
-    // override to my definition
-    //prop.explicit = Boolean(prop.range); // have false negative
-    if (prop.important) {
-      prop.value = prop.value.replace(/\s*!important\s*$/, "");
+  cssStyle: CSSStyle,
+  selectors: string[],
+  appliedProperties: AppliedCSSProperty,
+  inherited: boolean = false,
+): ParsedCSSPropertyValue[] {
+  const css: ParsedCSSPropertyValue[] = [];
+  for (const prop of cssStyle.cssProperties) {
+    if (prop.disabled || prop.parsedOk === false) {
+      // disable: commented property
+      continue;
     }
+    if (inherited && !isInheritableProperty(prop.name)) {
+      // not inheritable property, skip
+      continue;
+    }
+    //prop.explicit = Boolean(prop.range); // have false negative
+    const value = prop.value.replace(/\s*!important\s*$/, "");
 
     // .longhandProperties not exist if first arg is var
     // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
@@ -101,116 +68,269 @@ export function parseCSSProperties(
     // Current behavior will return all long-hands in CSSProperty, so we don't build lookup table,
     // but directly check whether it is in declared in cssText
 
-    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
+    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
+    const valueObj: ParsedCSSPropertyValue = {
+      name: prop.name,
+      value: value,
+      important: Boolean(prop.important),
+      explicit: explicit, //!longhandProperties.has(prop.name), //prop.explicit,
+    };
+    css.push(valueObj);
 
-    if (prop.disabled || prop.parsedOk === false) {
-      // disable: commented property
-      continue;
-    } else if (prop.name[0] === "-" && prop.name[1] !== "-") {
-      // vendor prefix
-      continue;
-    } else if (
-      !css[prop.name] ||
-      (!(css[prop.name].important && !prop.important) &&
-        // handle followed dup (bug?) without range (implicit)
-        !(css[prop.name].value === prop.value && !explicit))
-    ) {
-      if (!variableOnly || (variableOnly && prop.name.startsWith("--"))) {
-        css[prop.name] = {
-          value: prop.value,
-          important: Boolean(prop.important),
-          explicit: explicit, //!longhandProperties.has(prop.name), //prop.explicit,
-        };
+    const suffixes = new Set<string>();
+    for (const selector of selectors) {
+      const suffix = getNormalizedSuffix(CSSwhat.parse(selector)[0]);
+      suffixes.add(suffix);
+    }
+
+    for (const suffix of suffixes) {
+      if (
+        !appliedProperties[suffix][prop.name] ||
+        (!(appliedProperties[suffix][prop.name].important && !prop.important) &&
+          // handle followed dup (bug?) without range (implicit)
+          !(appliedProperties[suffix][prop.name].value === value && !explicit))
+      ) {
+        appliedProperties[suffix][prop.name] = valueObj; // same obj for final checking applied
       }
     }
   }
+  return css;
 }
 
-// if have media than cannot convert back to JSON
+function iterateRuleMatches(
+  ruleMatches: RuleMatch[],
+  appliedProperties: AppliedCSSProperty,
+  excludeOrigin: string[] | undefined = undefined,
+  inherited: boolean,
+): ParsedCSSRules {
+  const parsedRules: ParsedCSSRules = {};
+  for (const ruleMatch of ruleMatches) {
+    if (excludeOrigin?.includes(ruleMatch.rule.origin)) continue;
+    const matchingSelectors = ruleMatch.matchingSelectors.map(
+      (i) => ruleMatch.rule.selectorList.selectors[i].text,
+    );
+    const properties = parseCSSProperties(
+      ruleMatch.rule.style,
+      matchingSelectors,
+      appliedProperties,
+      inherited,
+    );
+    parsedRules[matchingSelectors.join(", ")] = properties;
+  }
+  return parsedRules;
+}
+
+export function iterateParsedCSS(
+  parsed: ParsedCSS,
+  callback: (
+    values: ParsedCSSPropertyValue[],
+    selectorList?: string, // can have multiple selectors separated by commas
+    context?:
+      | "inherited"
+      | "attributes"
+      | "matched"
+      | "pseudoElement"
+      | "inline",
+  ) => void,
+) {
+  for (const inheritedRules of parsed.inherited) {
+    for (const [selector, values] of Object.entries(inheritedRules)) {
+      callback(values, selector, "inherited");
+    }
+  }
+
+  callback(parsed.attributes, undefined, "attributes");
+
+  for (const [selector, rules] of Object.entries(parsed.matched)) {
+    callback(rules, selector, "matched");
+  }
+
+  for (const pseudoRules of Object.values(parsed.pseudoElementMatched)) {
+    for (const [selector, rules] of Object.entries(pseudoRules)) {
+      callback(rules, selector, "pseudoElement");
+    }
+  }
+
+  callback(parsed.inline, undefined, "inline");
+}
+
+export function parseGetMatchedStylesForNodeResponse(
+  response: GetMatchedStylesForNodeResponse,
+  options: { excludeOrigin?: string[]; replaceVariable?: boolean } = {},
+) {
+  const {
+    inherited,
+    inlineStyle,
+    attributesStyle,
+    matchedCSSRules,
+    pseudoElements,
+  } = response;
+
+  const parsed: ParsedCSS = {
+    inherited: [],
+    attributes: [],
+    matched: {},
+    pseudoElementMatched: {},
+    inline: [],
+  };
+  const appliedProperties: AppliedCSSProperty = {};
+
+  if (inherited) {
+    for (let i = inherited.length - 1; i >= 0; i--) {
+      const inheritedStyle = inherited[i];
+      const data = {};
+      if (inheritedStyle.inlineStyle) {
+        data[":inline"] = parseCSSProperties(
+          inheritedStyle.inlineStyle,
+          [],
+          appliedProperties,
+          true,
+        );
+      }
+      if (inheritedStyle.matchedCSSRules) {
+        const parsedRules = iterateRuleMatches(
+          inheritedStyle.matchedCSSRules,
+          appliedProperties,
+          options.excludeOrigin,
+          true,
+        );
+        Object.assign(data, parsedRules);
+      }
+      parsed.inherited.push(data);
+    }
+    // closest first
+    parsed.inherited.reverse();
+  }
+
+  if (attributesStyle) {
+    parsed.attributes = parseCSSProperties(
+      attributesStyle,
+      [],
+      appliedProperties,
+    );
+  }
+
+  if (matchedCSSRules) {
+    const parsedRules = iterateRuleMatches(
+      matchedCSSRules,
+      appliedProperties,
+      options.excludeOrigin,
+      false,
+    );
+    parsed.matched = parsedRules;
+  }
+
+  if (pseudoElements) {
+    for (const match of pseudoElements) {
+      const parsedRules = iterateRuleMatches(
+        match.matches,
+        appliedProperties,
+        options.excludeOrigin,
+        false,
+      );
+      parsed.pseudoElementMatched[match.pseudoType] = parsedRules;
+    }
+  }
+
+  if (inlineStyle) {
+    parsed.inline = parseCSSProperties(inlineStyle, [], appliedProperties);
+  }
+
+  const removeImplicit = (values: ParsedCSSPropertyValue[]) => {
+    return values.filter((v) => v.explicit);
+  };
+  const markApplied = (
+    values: ParsedCSSPropertyValue[],
+    selectorList: string,
+  ) => {
+    const suffixes = CSSwhat.parse(selectorList).map((sel) =>
+      getNormalizedSuffix(sel),
+    );
+    for (const value of values) {
+      const { name } = value;
+      value.applied = suffixes.some(
+        (suffix) => appliedProperties[suffix][name] === value,
+      );
+    }
+  };
+
+  iterateParsedCSS(parsed, removeImplicit);
+  iterateParsedCSS(parsed, markApplied);
+
+  if (options.replaceVariable) {
+    replaceVariables(parsed);
+  }
+
+  return parsed;
+}
+
 export function toStyleSheet(
   styleJSON: ParsedCSSRules,
-  mediaMinWidth: number | undefined = undefined,
-  mediaMaxWidth: number | undefined = undefined,
+  mediaCondition: string = "",
 ) {
   let stylesheet = "";
   for (const [selector, rules] of Object.entries(styleJSON)) {
-    const decls = Object.entries(rules)
+    const decls = rules
       .map(
-        ([prop, val]) =>
-          `${prop}: ${val.value}${val.important ? " !important" : ""};`,
+        (val) =>
+          `${val.name}: ${val.value}${val.important ? " !important" : ""};`,
       )
       .join("");
     stylesheet += `${selector} {${decls}}`;
   }
-  if (mediaMinWidth || mediaMaxWidth) {
-    // Indent each line of the stylesheet
-    if (mediaMinWidth && mediaMaxWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) and (width < ${mediaMaxWidth}px) {${stylesheet}}`;
-    } else if (mediaMinWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) {${stylesheet}}`;
-    } else {
-      // mediaMaxWidth
-      stylesheet = `@media (width < ${mediaMaxWidth}px) {${stylesheet}}`;
-    }
+  if (mediaCondition) {
+    stylesheet = `@media ${mediaCondition} {${stylesheet}}`;
   }
   return stylesheet;
 }
 
-export function replaceVariables(styleSheet: string): string {
-  const { css: cssReplaced } = postcss([postcssVarReplace()]).process(
-    styleSheet,
-  );
-
-  // Parse the CSS using postcss
-  const root = postcss.parse(cssReplaced);
-
-  // Merge rules with the same selector
-  const selectorMap = new Map();
-
-  root.walkRules((rule) => {
-    const selector = rule.selector;
-    if (!selectorMap.has(selector)) {
-      selectorMap.set(selector, []);
+export function replaceVariables(parsed: ParsedCSS): void {
+  const inheritedVariables: ParsedCSSPropertyValue[] = [];
+  for (const rules of parsed.inherited) {
+    for (const values of Object.values(rules)) {
+      for (const val of values) {
+        if (val.name.startsWith("--") && val.applied) {
+          inheritedVariables.push(val);
+        }
+      }
     }
-    selectorMap.get(selector).push(rule);
-  });
-
-  // Create a new root for merged rules
-  const mergedRoot = postcss.root();
-
-  for (const [selector, rules] of selectorMap.entries()) {
-    const propMap = new Map();
-    // Later rules override earlier ones
-    for (const rule of rules) {
-      rule.walkDecls((decl) => {
-        propMap.set(decl.prop, decl);
-      });
-    }
-    const mergedRule = postcss.rule({ selector });
-    for (const decl of propMap.values()) {
-      mergedRule.append(decl.clone());
-    }
-    mergedRoot.append(mergedRule);
   }
+  const styleSheet =
+    toStyleSheet({ ":root": inheritedVariables }) +
+    toStyleSheet({ ":inline": parsed.inline }) +
+    toStyleSheet(parsed.matched) +
+    Object.values(parsed.pseudoElementMatched)
+      .map((rules) => toStyleSheet(rules))
+      .join("");
 
-  //console.log(mergedRoot.toString());
-  return mergedRoot.toString();
-}
+  const { root } = postcss([postcssVarReplace()]).process(styleSheet);
 
-export function toStyleJSON(styleSheet: string): ParsedCSSRules {
-  const root = postcss.parse(styleSheet);
-  const result: ParsedCSSRules = {};
-
+  // Fixme: assume unique selector and property
+  const replaced: { [selector: string]: { [prop: string]: string } } = {};
   root.walkRules((rule) => {
     const selector = rule.selector;
-    if (!result[selector]) result[selector] = {};
+    if (!replaced[selector]) {
+      replaced[selector] = {};
+    }
     rule.walkDecls((decl) => {
-      result[selector][decl.prop] = {
-        value: decl.value,
-        important: decl.important,
-      };
+      replaced[selector][decl.prop] = decl.value;
     });
   });
-
-  return result;
+  const replaceVariablesRules = (parsedRules: ParsedCSSRules) => {
+    for (const [selector, rules] of Object.entries(parsedRules)) {
+      if (replaced[selector]) {
+        for (const rule of rules) {
+          // TODO: better var check
+          if (rule.value.includes("var(") && replaced[selector][rule.name]) {
+            rule.value = replaced[selector][rule.name];
+          }
+        }
+      }
+    }
+  };
+  replaceVariablesRules(parsed.matched);
+  for (const pseudoRules of Object.values(parsed.pseudoElementMatched)) {
+    replaceVariablesRules(pseudoRules);
+  }
+  replaceVariablesRules({ ":inline": parsed.inline });
 }
