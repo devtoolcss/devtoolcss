@@ -1,98 +1,36 @@
-import { postcssVarReplace } from "postcss-var-replace";
-import postcss from "postcss";
-
-import type { PseudoElement, PseudoSelector, Selector } from "css-what";
 import type {
-  NodeWithId,
-  PseudoElementMatches,
   ParsedCSSRules,
-  CSSProperty,
+  RuleMatch,
+  CSSStyle,
+  ParsedCSSPropertyValue,
+  GetMatchedStylesForNodeResponse,
+  ParsedCSS,
+  ParsedCSSPropertyObject,
 } from "./types.js";
 
-export function isEffectivePseudoElem(
-  pseudoMatch: PseudoElementMatches,
-  node: NodeWithId,
-): boolean {
-  const pseudoType = pseudoMatch.pseudoType;
-  if (pseudoType === "before" || pseudoType === "after") {
-    let content = '""';
-    for (const match of pseudoMatch.matches) {
-      for (const prop of match.rule.style.cssProperties) {
-        if (prop.name === "content") content = prop.value;
-      }
-    }
-    /*
-    if (content !== '""' && content !== "''")
-      console.log(JSON.stringify(content));
-    */
-    return content !== "normal" && content !== '""' && content !== "''";
-  }
+import { inheritableProperties } from "./constants.js";
 
-  if (pseudoType === "marker") {
-    return node.localName === "LI";
-  }
-
-  return true;
-}
-
-export function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
-  for (const node of parsedSelector) {
-    if (node.type === "pseudo") {
-      if (!node.data) return true;
-
-      if (Array.isArray(node.data) && node.name !== "not") {
-        for (const selector of node.data) {
-          if (hasNonFuncPseudoClass(selector)) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Normalize the pseudo-class/element suffix:
- * - Removes functional pseudo-classes (e.g. :not(), :nth-child())
- * - Sorts pseudo-classes/elements alphabetically
- * - Keeps only the pseudo part (e.g. ":hover", "::before")
- */
-
-//A pseudo-element must appear after all the other components in the complex or compound selector.
-
-export function getNormalizedSuffix(parsedSelector: Selector[]): string {
-  const pseudoClasses = [];
-  let pseudoElement = null;
-  for (let i = parsedSelector.length - 1; i >= 0; --i) {
-    if (parsedSelector[i].type === "pseudo") {
-      // type to PseudoSelector
-      const pseudo = parsedSelector[i] as PseudoSelector;
-      if (!pseudo.data) {
-        // exclude functional pseudo-classes
-        pseudoClasses.push(":" + pseudo.name);
-      }
-    } else if (parsedSelector[i].type === "pseudo-element") {
-      // type to PseudoElement
-      pseudoElement = "::" + (parsedSelector[i] as PseudoElement).name;
-    } else {
-      break;
-    }
-  }
-  pseudoClasses.sort();
-  return pseudoClasses.join("") + (pseudoElement ? pseudoElement : "");
+function isInheritableProperty(propName: string): boolean {
+  return propName.startsWith("--") || inheritableProperties.includes(propName);
 }
 
 export function parseCSSProperties(
-  cssProperties: CSSProperty[],
-  cssText: string,
-  css: ParsedCSSRules[string],
-  variableOnly = false,
-) {
-  for (const prop of cssProperties) {
-    // override to my definition
-    //prop.explicit = Boolean(prop.range); // have false negative
-    if (prop.important) {
-      prop.value = prop.value.replace(/\s*!important\s*$/, "");
+  cssStyle: CSSStyle,
+  appliedProperties: ParsedCSSPropertyObject,
+  inherited: boolean = false,
+): ParsedCSSPropertyValue[] {
+  const css: ParsedCSSPropertyValue[] = [];
+  for (const prop of cssStyle.cssProperties) {
+    if (prop.disabled || prop.parsedOk === false) {
+      // disable: commented property
+      continue;
     }
+    if (inherited && !isInheritableProperty(prop.name)) {
+      // not inheritable property, skip
+      continue;
+    }
+    //prop.explicit = Boolean(prop.range); // have false negative
+    const value = prop.value.replace(/\s*!important\s*$/, "");
 
     // .longhandProperties not exist if first arg is var
     // padding: var(--lp-section-padding-top) var(--lp-section-padding-x) var(--lp-section-padding-bottom);
@@ -101,116 +39,253 @@ export function parseCSSProperties(
     // Current behavior will return all long-hands in CSSProperty, so we don't build lookup table,
     // but directly check whether it is in declared in cssText
 
-    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssText);
+    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
+    const valueObj: ParsedCSSPropertyValue = {
+      name: prop.name,
+      value: value,
+      important: Boolean(prop.important),
+      inherited: inherited,
+      explicit: explicit, //!longhandProperties.has(prop.name), //prop.explicit,
+    };
+    css.push(valueObj);
 
-    if (prop.disabled || prop.parsedOk === false) {
-      // disable: commented property
-      continue;
-    } else if (prop.name[0] === "-" && prop.name[1] !== "-") {
-      // vendor prefix
-      continue;
-    } else if (
-      !css[prop.name] ||
-      (!(css[prop.name].important && !prop.important) &&
+    const canOverride = (
+      a: ParsedCSSPropertyValue,
+      b: ParsedCSSPropertyValue,
+    ): boolean => {
+      // inherited properties can always be overridden without considering importance
+      if (a.inherited) return true;
+      return (
+        // important has higher priority
+        !(a.important && !b.important) &&
         // handle followed dup (bug?) without range (implicit)
-        !(css[prop.name].value === prop.value && !explicit))
+        !(a.value === b.value && !explicit)
+      );
+    };
+
+    if (
+      !appliedProperties[prop.name] ||
+      canOverride(appliedProperties[prop.name], valueObj)
     ) {
-      if (!variableOnly || (variableOnly && prop.name.startsWith("--"))) {
-        css[prop.name] = {
-          value: prop.value,
-          important: Boolean(prop.important),
-          explicit: explicit, //!longhandProperties.has(prop.name), //prop.explicit,
-        };
+      appliedProperties[prop.name] = valueObj; // same obj for final checking applied
+    }
+  }
+  return css;
+}
+
+function iterateRuleMatches(
+  ruleMatches: RuleMatch[],
+  appliedProperties: ParsedCSSPropertyObject,
+  excludeOrigin: string[] | undefined = undefined,
+  inherited: boolean,
+): ParsedCSSRules {
+  const parsedRules: ParsedCSSRules = {};
+  for (const ruleMatch of ruleMatches) {
+    if (excludeOrigin?.includes(ruleMatch.rule.origin)) continue;
+    const matchingSelectors = ruleMatch.matchingSelectors.map(
+      (i) => ruleMatch.rule.selectorList.selectors[i].text,
+    );
+    const properties = parseCSSProperties(
+      ruleMatch.rule.style,
+      appliedProperties,
+      inherited,
+    );
+    const selectorList = matchingSelectors.join(", ");
+    // merge if same selectorList
+    if (!parsedRules[selectorList]) parsedRules[selectorList] = properties;
+    else parsedRules[selectorList].push(...properties);
+  }
+  return parsedRules;
+}
+
+export function iterateParsedCSS(
+  parsed: ParsedCSS,
+  callback: (
+    values: ParsedCSSPropertyValue[],
+    selectorList?: string, // can have multiple selectors separated by commas
+    context?:
+      | "inherited"
+      | "attributes"
+      | "matched"
+      | "pseudoElementMatched"
+      | "inline",
+  ) => void,
+) {
+  for (const inheritedRules of parsed.inherited) {
+    for (const [selector, rules] of Object.entries(inheritedRules)) {
+      callback(rules, selector, "inherited");
+    }
+  }
+
+  callback(parsed.attributes, undefined, "attributes");
+
+  for (const [selector, rules] of Object.entries(parsed.matched)) {
+    callback(rules, selector, "matched");
+  }
+
+  for (const pseudoRules of Object.values(parsed.pseudoElementMatched)) {
+    for (const [selector, rules] of Object.entries(pseudoRules)) {
+      callback(rules, selector, "pseudoElementMatched");
+    }
+  }
+
+  callback(parsed.inline, undefined, "inline");
+}
+
+export function parseGetMatchedStylesForNodeResponse(
+  response: GetMatchedStylesForNodeResponse,
+  options: { excludeOrigin?: string[]; removeUnusedVar?: boolean } = {},
+) {
+  const {
+    inherited,
+    inlineStyle,
+    attributesStyle,
+    matchedCSSRules,
+    pseudoElements,
+  } = response;
+
+  const parsed: ParsedCSS = {
+    inherited: [],
+    attributes: [],
+    matched: {},
+    pseudoElementMatched: {},
+    inline: [],
+  };
+  const appliedProperties: ParsedCSSPropertyObject = {};
+
+  if (inherited) {
+    for (let i = inherited.length - 1; i >= 0; i--) {
+      const inheritedStyle = inherited[i];
+      const data = {};
+      if (inheritedStyle.inlineStyle) {
+        data["::inline"] = parseCSSProperties(
+          inheritedStyle.inlineStyle,
+          appliedProperties,
+          true,
+        );
+      }
+      if (inheritedStyle.matchedCSSRules) {
+        const parsedRules = iterateRuleMatches(
+          inheritedStyle.matchedCSSRules,
+          appliedProperties,
+          options.excludeOrigin,
+          true,
+        );
+        Object.assign(data, parsedRules);
+      }
+      parsed.inherited.push(data);
+    }
+    // closest first
+    parsed.inherited.reverse();
+  }
+
+  if (attributesStyle) {
+    parsed.attributes = parseCSSProperties(attributesStyle, appliedProperties);
+  }
+
+  if (matchedCSSRules) {
+    const parsedRules = iterateRuleMatches(
+      matchedCSSRules,
+      appliedProperties,
+      options.excludeOrigin,
+      false,
+    );
+    parsed.matched = parsedRules;
+  }
+
+  if (pseudoElements) {
+    for (const match of pseudoElements) {
+      const parsedRules = iterateRuleMatches(
+        match.matches,
+        appliedProperties,
+        options.excludeOrigin,
+        false,
+      );
+      parsed.pseudoElementMatched[match.pseudoType] = parsedRules;
+    }
+  }
+
+  if (inlineStyle) {
+    parsed.inline = parseCSSProperties(inlineStyle, appliedProperties);
+  }
+
+  const removeImplicit = (values: ParsedCSSPropertyValue[]) => {
+    for (let i = values.length - 1; i >= 0; i--) {
+      if (!values[i].explicit) {
+        values.splice(i, 1);
       }
     }
+  };
+  const cleanValues = (values: ParsedCSSPropertyValue[]) => {
+    for (const value of values) {
+      delete value.explicit;
+      delete value.inherited;
+    }
+  };
+  const markApplied = (values: ParsedCSSPropertyValue[]) => {
+    for (const value of values) {
+      value.applied = appliedProperties[value.name] === value;
+    }
+  };
+
+  iterateParsedCSS(parsed, removeImplicit);
+  iterateParsedCSS(parsed, cleanValues);
+  iterateParsedCSS(parsed, markApplied);
+
+  if (options.removeUnusedVar) {
+    removeUnusedVariables(parsed);
   }
+
+  return parsed;
 }
 
-// if have media than cannot convert back to JSON
-export function toStyleSheet(
-  styleJSON: ParsedCSSRules,
-  mediaMinWidth: number | undefined = undefined,
-  mediaMaxWidth: number | undefined = undefined,
-) {
-  let stylesheet = "";
-  for (const [selector, rules] of Object.entries(styleJSON)) {
-    const decls = Object.entries(rules)
-      .map(
-        ([prop, val]) =>
-          `${prop}: ${val.value}${val.important ? " !important" : ""};`,
-      )
-      .join("");
-    stylesheet += `${selector} {${decls}}`;
-  }
-  if (mediaMinWidth || mediaMaxWidth) {
-    // Indent each line of the stylesheet
-    if (mediaMinWidth && mediaMaxWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) and (width < ${mediaMaxWidth}px) {${stylesheet}}`;
-    } else if (mediaMinWidth) {
-      stylesheet = `@media (width >= ${mediaMinWidth}px) {${stylesheet}}`;
+function removeUnusedVariables(parsed: ParsedCSS) {
+  const removedVariables: Set<string> = new Set();
+  const varUses = new Map<string, number>();
+  iterateParsedCSS(parsed, (values) => {
+    for (const val of values) {
+      if (val.value.includes("var("))
+        varUses.set(val.value, (varUses.get(val.value) || 0) + 1);
+    }
+  });
+  function removeUse(value: string) {
+    if (!varUses.has(value)) return;
+    const count = varUses.get(value)! - 1;
+    if (count === 0) {
+      varUses.delete(value);
     } else {
-      // mediaMaxWidth
-      stylesheet = `@media (width < ${mediaMaxWidth}px) {${stylesheet}}`;
+      varUses.set(value, count);
     }
   }
-  return stylesheet;
-}
 
-export function replaceVariables(styleSheet: string): string {
-  const { css: cssReplaced } = postcss([postcssVarReplace()]).process(
-    styleSheet,
-  );
-
-  // Parse the CSS using postcss
-  const root = postcss.parse(cssReplaced);
-
-  // Merge rules with the same selector
-  const selectorMap = new Map();
-
-  root.walkRules((rule) => {
-    const selector = rule.selector;
-    if (!selectorMap.has(selector)) {
-      selectorMap.set(selector, []);
-    }
-    selectorMap.get(selector).push(rule);
-  });
-
-  // Create a new root for merged rules
-  const mergedRoot = postcss.root();
-
-  for (const [selector, rules] of selectorMap.entries()) {
-    const propMap = new Map();
-    // Later rules override earlier ones
-    for (const rule of rules) {
-      rule.walkDecls((decl) => {
-        propMap.set(decl.prop, decl);
-      });
-    }
-    const mergedRule = postcss.rule({ selector });
-    for (const decl of propMap.values()) {
-      mergedRule.append(decl.clone());
-    }
-    mergedRoot.append(mergedRule);
-  }
-
-  //console.log(mergedRoot.toString());
-  return mergedRoot.toString();
-}
-
-export function toStyleJSON(styleSheet: string): ParsedCSSRules {
-  const root = postcss.parse(styleSheet);
-  const result: ParsedCSSRules = {};
-
-  root.walkRules((rule) => {
-    const selector = rule.selector;
-    if (!result[selector]) result[selector] = {};
-    rule.walkDecls((decl) => {
-      result[selector][decl.prop] = {
-        value: decl.value,
-        important: decl.important,
-      };
+  let removed = false;
+  do {
+    removed = false;
+    iterateParsedCSS(parsed, (values) => {
+      for (let i = values.length - 1; i >= 0; i--) {
+        const val = values[i];
+        if (val.name.startsWith("--")) {
+          if (removedVariables.has(val.name)) {
+            removeUse(val.value);
+            values.splice(i, 1);
+            removed = true;
+          } else {
+            let used = false;
+            for (const v of varUses.keys()) {
+              if (v.includes(val.name)) {
+                used = true;
+                break;
+              }
+            }
+            if (!used) {
+              removeUse(val.value);
+              values.splice(i, 1);
+              removedVariables.add(val.name);
+              removed = true;
+            }
+          }
+        }
+      }
     });
-  });
-
-  return result;
+  } while (removed);
 }

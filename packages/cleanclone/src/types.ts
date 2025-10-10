@@ -2,11 +2,10 @@
 // to fit the DOMApi type
 import type { Protocol } from "devtools-protocol";
 import type { ProtocolProxyApi } from "devtools-protocol/types/protocol-proxy-api.js";
-import type { ParsedStyleSheet } from "@devtoolcss/parser";
+import type { ParsedCSS } from "@devtoolcss/parser";
 
 export type {
-  ParsedStyleSheet,
-  ParsedCSSProperties,
+  ParsedCSS,
   ParsedCSSRules,
   GetMatchedStylesForNodeResponse,
   RuleMatch,
@@ -16,7 +15,7 @@ export type {
 export type Node = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
   children?: Node[];
-  css?: ParsedStyleSheet;
+  css?: ParsedCSS[];
   //computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
 

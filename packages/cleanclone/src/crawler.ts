@@ -4,21 +4,14 @@ import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
 import {
-  cascade,
-  toStyleSheet,
-  replaceVariables,
-  toStyleJSON,
+  parseGetMatchedStylesForNodeResponse,
+  getInlineText,
   traverse,
   CDPNodeType,
   inlineStyle,
   forciblePseudoClasses,
 } from "@devtoolcss/parser";
-import type {
-  Node,
-  GetMatchedStylesForNodeResponse,
-  ParsedStyleSheet,
-  ParsedCSSRules,
-} from "./types.js";
+import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
 import {
   getAvailableFilename,
   getFilename,
@@ -687,7 +680,7 @@ export class Crawler extends EventEmitter {
       let totalElements = 0;
       const initElements = async (node: Node) => {
         await setIdAttrs(node);
-        node.css = {};
+        node.css = [];
         totalElements += 1;
       };
       await traverse(root, initElements, this.onError, true);
@@ -754,12 +747,10 @@ export class Crawler extends EventEmitter {
             forcedPseudoClasses: [],
           });
 
-          node.css[deviceIndex] = cascade(
-            node,
-            styles,
-            childrenStyleBefore,
-            childrenStyleAfter,
-          );
+          node.css[deviceIndex] = parseGetMatchedStylesForNodeResponse(styles, {
+            excludeOrigin: ["user-agent"],
+            removeUnusedVar: true,
+          });
 
           processed += 1;
           this.emitProgress({
@@ -776,29 +767,6 @@ export class Crawler extends EventEmitter {
         },
         this.onError,
         false,
-      );
-
-      function cleanUp(node: Node) {
-        for (const rulesObj of Object.values(node.css || {})) {
-          for (const [selector, rules] of Object.entries(rulesObj)) {
-            for (const [prop, value] of Object.entries(rules)) {
-              if (!value.explicit) {
-                delete rules[prop];
-              } else {
-                delete value.explicit;
-              }
-            }
-          }
-        }
-      }
-
-      await traverse(
-        root,
-        (node) => {
-          cleanUp(node);
-        },
-        this.onError,
-        true,
       );
 
       const clonedRoot = structuredClone(root);
@@ -819,11 +787,18 @@ export class Crawler extends EventEmitter {
 
     await traverse(
       cdpRoot,
-      (node) => {
-        this.mergeStyles(node, this.screens);
+      async (node) => {
+        const inlineText = getInlineText(
+          node,
+          node.css,
+          this.buildMediaCondition(this.cfg.breakpoints),
+        );
+        if (inlineText) {
+          node.attributes.push("data-css", inlineText);
+        }
       },
       this.onError,
-      true,
+      false,
     );
 
     const dom = this.toJSDOM(cdpRoot);
@@ -895,6 +870,23 @@ export class Crawler extends EventEmitter {
         mobile: false, // TODO: option? but seems not matter if no touch event
       };
     });
+  }
+
+  private buildMediaCondition(breakpoints: number[]): string[] {
+    const mediaConditions: string[] = [];
+    for (let i = 0; i < breakpoints.length + 1; i++) {
+      let cond = "";
+      if (i === 0) cond = `(width < ${breakpoints[i]}px)`;
+      else if (i === breakpoints.length)
+        cond = `(width >= ${breakpoints[i - 1]}px)`;
+      else
+        cond = `(width >= ${breakpoints[i - 1]}px) and (width < ${
+          breakpoints[i]
+        }px)`;
+
+      mediaConditions.push(cond);
+    }
+    return mediaConditions;
   }
 
   private toJSDOM(cdpBody: Node, setNodeId = false) {
@@ -973,100 +965,31 @@ export class Crawler extends EventEmitter {
     return dom;
   }
 
-  private mergeStyles(
-    node: Node,
-    screens: { width: number; height: number; mobile: boolean }[],
-  ) {
-    const styleJSONs: ParsedStyleSheet = {};
-    Object.entries(node.css || {}).forEach(([screenKey, rules]) => {
-      styleJSONs[screenKey] = toStyleJSON(
-        replaceVariables(toStyleSheet(rules)),
-      );
-    });
-    const sharedCSS: ParsedCSSRules = {};
-    const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
-    if (firstStyleJSON) {
-      for (const [targetSelector, targetRule] of Object.entries(
-        firstStyleJSON,
-      )) {
-        for (const [targetProp, targetValue] of Object.entries(targetRule)) {
-          const isShared = otherStyleJSONs.every(
-            (styleJSON: any) =>
-              styleJSON[targetSelector] &&
-              JSON.stringify(styleJSON[targetSelector][targetProp]) ===
-                JSON.stringify(targetValue),
-          );
-          if (isShared) {
-            if (!sharedCSS[targetSelector]) sharedCSS[targetSelector] = {};
-            sharedCSS[targetSelector][targetProp] = targetValue;
-            Object.values(styleJSONs).forEach((styleJSON: any) => {
-              if (styleJSON[targetSelector])
-                delete styleJSON[targetSelector][targetProp];
-            });
-          }
-        }
-        for (const screenKey of Object.keys(styleJSONs)) {
-          const styleKeyJSON = styleJSONs[screenKey];
-          for (const selector of Object.keys(styleKeyJSON))
-            if (Object.keys(styleKeyJSON[selector]).length === 0)
-              delete styleKeyJSON[selector];
-          if (Object.keys(styleJSONs[screenKey]).length === 0)
-            delete styleJSONs[screenKey];
-        }
-      }
-    }
-    let style: string = "";
-    if (
-      Object.keys(styleJSONs).length === 0 &&
-      Object.keys(sharedCSS).length === 0
-    )
-      return;
-    else if (
-      Object.keys(styleJSONs).length === 0 &&
-      Object.keys(sharedCSS).length === 1 &&
-      Object.keys(sharedCSS)[0] === `#${node.id}`
-    ) {
-      for (const [key, value] of Object.entries(sharedCSS[`#${node.id}`])) {
-        style += `${key}: ${value.value}${
-          value.important ? " !important" : ""
-        }; `;
-      }
-    } else {
-      if (Object.keys(sharedCSS).length > 0) style += toStyleSheet(sharedCSS);
-      for (const key of Object.keys(styleJSONs)) {
-        const i = parseInt(key);
-        if (i === 0)
-          style += toStyleSheet(styleJSONs[i], null, this.cfg.breakpoints[i]);
-        else if (i === screens.length - 1)
-          style += toStyleSheet(
-            styleJSONs[i],
-            this.cfg.breakpoints[i - 1],
-            null,
-          );
-        else
-          style += toStyleSheet(
-            styleJSONs[i],
-            this.cfg.breakpoints[i - 1],
-            this.cfg.breakpoints[i],
-          );
-      }
-    }
-    node.attributes.push("data-css", style);
-  }
-
   private mergeTrees(roots: Node[]): Node {
     const mergedRoot = roots[0];
     // merge css, filling missing with display: none
     if (mergedRoot.nodeType === CDPNodeType.ELEMENT_NODE) {
-      mergedRoot.css = roots.reduce((acc, root) => {
-        acc = { ...acc, ...root.css };
-        return acc;
-      }, {});
+      for (const root of roots.slice(1)) {
+        for (let i = 0; i < this.screens.length; ++i) {
+          if (root.css[i]) {
+            mergedRoot.css[i] = root.css[i];
+          }
+        }
+      }
       for (let i = 0; i < this.screens.length; ++i) {
         if (!mergedRoot.css[i]) {
-          mergedRoot.css[i] = {};
-          mergedRoot.css[i][`#${mergedRoot.id}`] = {
-            display: { value: "none" },
+          mergedRoot.css[i] = {
+            inherited: [],
+            attributes: [],
+            matched: {},
+            pseudoElementMatched: {},
+            inline: [
+              {
+                name: "display",
+                value: "none",
+                important: false,
+              },
+            ],
           };
         }
       }

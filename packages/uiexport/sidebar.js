@@ -2,12 +2,10 @@
 
 import {
   traverse,
-  cascade,
+  parseGetMatchedStylesForNodeResponse,
+  getInlineText,
   inlineStyle,
   CDPNodeType,
-  toStyleSheet,
-  toStyleJSON,
-  replaceVariables,
   forciblePseudoClasses,
 } from "@devtoolcss/parser";
 
@@ -108,79 +106,6 @@ function toDOM(cdpRoot, setNodeId = false) {
   return doc;
 }
 
-function mergeStyles(
-  node,
-  screens = [{ width: 1024, height: 800, mobile: false }],
-) {
-  const styleJSONs = {};
-  Object.entries(node.css || {}).forEach(([screenKey, rules]) => {
-    styleJSONs[screenKey] = toStyleJSON(replaceVariables(toStyleSheet(rules)));
-  });
-  const sharedCSS = {};
-  const [firstStyleJSON, ...otherStyleJSONs] = Object.values(styleJSONs);
-  if (firstStyleJSON) {
-    for (const [targetSelector, targetRule] of Object.entries(firstStyleJSON)) {
-      for (const [targetProp, targetValue] of Object.entries(targetRule)) {
-        const isShared = otherStyleJSONs.every(
-          (styleJSON) =>
-            styleJSON[targetSelector] &&
-            JSON.stringify(styleJSON[targetSelector][targetProp]) ===
-              JSON.stringify(targetValue),
-        );
-        if (isShared) {
-          if (!sharedCSS[targetSelector]) sharedCSS[targetSelector] = {};
-          sharedCSS[targetSelector][targetProp] = targetValue;
-          Object.values(styleJSONs).forEach((styleJSON) => {
-            if (styleJSON[targetSelector])
-              delete styleJSON[targetSelector][targetProp];
-          });
-        }
-      }
-      for (const screenKey of Object.keys(styleJSONs)) {
-        const styleKeyJSON = styleJSONs[screenKey];
-        for (const selector of Object.keys(styleKeyJSON))
-          if (Object.keys(styleKeyJSON[selector]).length === 0)
-            delete styleKeyJSON[selector];
-        if (Object.keys(styleJSONs[screenKey]).length === 0)
-          delete styleJSONs[screenKey];
-      }
-    }
-  }
-  let style = "";
-  if (
-    Object.keys(styleJSONs).length === 0 &&
-    Object.keys(sharedCSS).length === 0
-  )
-    return;
-  else if (
-    Object.keys(styleJSONs).length === 0 &&
-    Object.keys(sharedCSS).length === 1 &&
-    Object.keys(sharedCSS)[0] === `#${node.id}`
-  ) {
-    for (const [key, value] of Object.entries(sharedCSS[`#${node.id}`])) {
-      style += `${key}: ${value.value}${
-        value.important ? " !important" : ""
-      }; `;
-    }
-  } else {
-    if (Object.keys(sharedCSS).length > 0) style += toStyleSheet(sharedCSS);
-    for (const key of Object.keys(styleJSONs)) {
-      const i = parseInt(key);
-      if (i === 0)
-        style += toStyleSheet(styleJSONs[i], null, this.cfg.breakpoints[i]);
-      else if (i === screens.length - 1)
-        style += toStyleSheet(styleJSONs[i], this.cfg.breakpoints[i - 1], null);
-      else
-        style += toStyleSheet(
-          styleJSONs[i],
-          this.cfg.breakpoints[i - 1],
-          this.cfg.breakpoints[i],
-        );
-    }
-  }
-  node.attributes.push("data-css", style);
-}
-
 async function setIdAttrs(node) {
   let id = `node-${node.nodeId}`;
   let hasId = false;
@@ -227,11 +152,13 @@ async function clone(root) {
 
   const doc = toDOM(root, true);
   const checkChildrenNodeIds = new Set();
+  /*
   try {
     doc.querySelectorAll("li:has([aria-expanded])").forEach((el) => {
       checkChildrenNodeIds.add(Number(el.attributes["data-nodeId"].value));
     });
   } catch {}
+  */
   await traverse(
     root,
     async (node) => {
@@ -289,12 +216,14 @@ async function clone(root) {
         forcedPseudoClasses: [],
       });
 
-      node.css[deviceIndex] = cascade(
-        node,
-        styles,
-        childrenStyleBefore,
-        childrenStyleAfter,
-      );
+      const parsedResponse = parseGetMatchedStylesForNodeResponse(styles, {
+        excludeOrigin: ["user-agent"],
+        removeUnusedVar: true,
+      });
+      const inlineText = getInlineText(node, [parsedResponse], [""]);
+      if (inlineText) {
+        node.attributes.push("data-css", inlineText);
+      }
 
       updateProgress(progressBar.value + 1);
     },
@@ -302,37 +231,6 @@ async function clone(root) {
     false,
   );
 
-  function cleanUp(node) {
-    for (const rulesObj of Object.values(node.css || {})) {
-      for (const [selector, rules] of Object.entries(rulesObj)) {
-        for (const [prop, value] of Object.entries(rules)) {
-          if (!value.explicit) {
-            delete rules[prop];
-          } else {
-            delete value.explicit;
-          }
-        }
-      }
-    }
-  }
-
-  await traverse(
-    root,
-    (node) => {
-      cleanUp(node);
-    },
-    console.error,
-    true,
-  );
-
-  await traverse(
-    root,
-    (node) => {
-      mergeStyles(node);
-    },
-    console.error,
-    true,
-  );
   const finalDoc = toDOM(root, false);
   inlineStyle(finalDoc, "data-css", true);
   return finalDoc;
