@@ -1,6 +1,6 @@
 # DevtoolCSS
 
-**DevtoolCSS** is a monorepo providing utilities and applications for manipulating DevTool's CSS data, currently supporting **Chrome DevTools Protocol (CDP)**. It aims to demonstrate programmatical use of style panel's information.
+**DevtoolCSS** is a monorepo providing utilities and applications for manipulating DevTool's CSS data, currently supporting **Chrome DevTools Protocol (CDP)**. It aims to demonstrate programmatic use of style panel's information.
 
 Currently there are two applications focusing on inlining:
 
