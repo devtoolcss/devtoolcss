@@ -3,8 +3,7 @@
   "name": "UI Export",
   "version": "0.1",
   "description": "Export any components with CSS inlined.",
-  "permissions": ["activeTab", "debugger"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": ["debugger"],
   "devtools_page": "devtools.html",
   "icons": {
     "128": "icons/128.png"
