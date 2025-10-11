@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Selected NodeID Debugger",
-  "version": "1.0",
-  "description": "Uses chrome.debugger to get the nodeId of the selected element ($0) in DevTools.",
+  "name": "UI Export",
+  "version": "0.0",
+  "description": "Export any components with CSS inlined.",
   "permissions": ["activeTab", "debugger"],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools.html",
