@@ -11,7 +11,7 @@
     "esbuild": "0.25.10"
   },
   "dependencies": {
-    "@clonecss/cleanclone-core": "file:../core",
+    "@devtoolcss/parser": "file:../parser",
     "highlight.js": "^11.11.1",
     "js-beautify": "^1.15.4"
   },

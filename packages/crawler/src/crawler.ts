@@ -12,7 +12,7 @@ import {
   CDPNodeType,
   inlineStyle,
   forciblePseudoClasses,
-} from "@clonecss/cleanclone-core";
+} from "@devtoolcss/parser";
 import type {
   Node,
   GetMatchedStylesForNodeResponse,

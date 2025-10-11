@@ -9,7 +9,7 @@ import {
   toStyleJSON,
   replaceVariables,
   forciblePseudoClasses,
-} from "@clonecss/cleanclone-core";
+} from "@devtoolcss/parser";
 
 import { getUniqueSelector } from "./selector.js";
 

@@ -1,6 +1,5 @@
 {
-  "name": "@clonecss/cleanclone-core",
-  "private": true,
+  "name": "@devtoolcss/parser",
   "version": "0.0.0",
   "description": "",
   "license": "MIT",
