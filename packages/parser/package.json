@@ -3,7 +3,24 @@
   "version": "0.0.5",
   "description": "",
   "license": "MIT",
-  "author": "",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:devtoolcss/devtoolcss.git"
+  },
+  "homepage": "https://github.com/devtoolcss/devtoolcss#readme",
+  "keywords": [
+    "css",
+    "html",
+    "devtools-protocol"
+  ],
+  "publishConfig": {
+    "provenance": true
+  },
   "type": "module",
   "exports": {
     ".": {

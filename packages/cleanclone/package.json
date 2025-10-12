@@ -10,9 +10,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git@github.com:b10902118/cleanclone.git"
+    "url": "git@github.com:devtoolcss/devtoolcss.git"
   },
-  "homepage": "https://github.com/b10902118/cleanclone#readme",
+  "homepage": "https://github.com/devtoolcss/devtoolcss#readme",
   "keywords": [
     "css",
     "html",
@@ -20,6 +20,9 @@
     "inline",
     "devtools-protocol"
   ],
+  "publishConfig": {
+    "provenance": true
+  },
   "type": "module",
   "dependencies": {
     "@devtoolcss/parser": "workspace:*",
