@@ -1,5 +1,4 @@
 {
-  "name": "cleanclone-monorepo",
   "private": true,
   "license": "MIT",
   "workspaces": [
