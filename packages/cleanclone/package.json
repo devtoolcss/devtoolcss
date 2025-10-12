@@ -22,7 +22,7 @@
   ],
   "type": "module",
   "dependencies": {
-    "@devtoolcss/parser": "file:../parser",
+    "@devtoolcss/parser": "workspace:*",
     "chalk": "^5.6.2",
     "chrome-launcher": "^1.2.1",
     "chrome-remote-interface": "^0.33.3",
@@ -43,11 +43,12 @@
     "@types/jsdom": "^21.1.7",
     "@types/node": "^24.3.1",
     "@types/react": "^19.1.13",
-    "@types/yargs": "^17.0.33"
+    "@types/yargs": "^17.0.33",
+    "devtools-protocol": "0.0.927104"
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build && chmod +x ./dist/cli.js",
+    "prepare": "pnpm build && chmod +x ./dist/cli.js",
     "type-check": "tsc --noEmit"
   },
   "bin": {

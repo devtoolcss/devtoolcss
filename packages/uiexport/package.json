@@ -11,7 +11,7 @@
     "esbuild": "0.25.10"
   },
   "dependencies": {
-    "@devtoolcss/parser": "file:../parser",
+    "@devtoolcss/parser": "workspace:*",
     "highlight.js": "^11.11.1",
     "js-beautify": "^1.15.4"
   },

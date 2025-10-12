@@ -1,3 +1,5 @@
+// here devtools-protocol is the old version of chrome-remote-interface
+// to fit the DOMApi type
 import type { Protocol } from "devtools-protocol";
 import type { ProtocolProxyApi } from "devtools-protocol/types/protocol-proxy-api.js";
 import type { ParsedStyleSheet } from "@devtoolcss/parser";

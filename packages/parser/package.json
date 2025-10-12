@@ -13,7 +13,8 @@
   },
   "module": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "prepare": "pnpm build"
   },
   "dependencies": {
     "css-what": "^7.0.0",
@@ -21,6 +22,7 @@
     "postcss-var-replace": "^1.0.0"
   },
   "devDependencies": {
-    "@types/chrome-remote-interface": "^0.31.14"
+    "@types/chrome-remote-interface": "^0.31.14",
+    "devtools-protocol": "^0.0.1528500"
   }
 }
