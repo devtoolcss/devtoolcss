@@ -26,12 +26,8 @@ import {
   MIME,
   getExtension,
 } from "./file.js";
-import { rewriteResourceLinks } from "./rewrite.js";
-import {
-  getFontRules,
-  getAnchorHref,
-  normalizeSameSiteHref,
-} from "./runtime.js";
+import { rewriteResourceLinks, normalizeSameSiteHref } from "./rewrite.js";
+import { getFontRules, getAnchorHref } from "./runtime.js";
 import { highlightNode } from "./highlight.js";
 import {
   getPath,
@@ -868,11 +864,7 @@ export class Crawler extends EventEmitter {
       pageBase = path.dirname(path.join(pagePath, "dummy"));
     }
     const origin = getOrigin(pageURL);
-    await Runtime.evaluate({
-      expression:
-        normalizeSameSiteHref.toString() +
-        `; normalizeSameSiteHref(${JSON.stringify(origin)});`,
-    });
+    normalizeSameSiteHref(dom, origin);
     // Insert the font link tag as the first child of <head>
     const fontLink = dom.window.document.createElement("link");
     fontLink.rel = "stylesheet";

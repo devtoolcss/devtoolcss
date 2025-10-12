@@ -52,30 +52,3 @@ export function getAnchorHref() {
   });
   return [...links];
 }
-
-export function normalizeSameSiteHref(origin) {
-  document.querySelectorAll("a").forEach((el) => {
-    if (el.href) {
-      try {
-        const url = new URL(el.href, document.baseURI);
-        if (url.origin === origin) {
-          let pathname = url.pathname ? url.pathname : "/";
-          // handle extensions like .php, .asp, .aspx, etc
-          const ext = pathname.split("/").pop()?.split(".").pop();
-          if (
-            ext &&
-            ext !== "html" &&
-            ext !== "htm" &&
-            !pathname.endsWith("/")
-          ) {
-            pathname = pathname.slice(0, pathname.length - ext.length) + "html";
-          }
-          const newHref = pathname + url.search + url.hash;
-          el.setAttribute("href", newHref || "#");
-        }
-      } catch (e) {
-        // Ignore invalid URLs
-      }
-    }
-  });
-}

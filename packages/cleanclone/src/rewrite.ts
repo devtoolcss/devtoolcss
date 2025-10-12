@@ -1,3 +1,4 @@
+import type { JSDOM } from "jsdom";
 import escapeHTML from "escape-html";
 import escapeStringRegexp from "escape-string-regexp";
 import path from "path";
@@ -7,7 +8,9 @@ const urlCharSet = `[\\w\\/.~%:@&+$,!*-]?#`; // ='()\\[\\]; not included because
 function urlRegex(url: string, html: boolean, prefixRegexStr = "") {
   const content = html ? escapeHTML(url) : url;
   return new RegExp(
-    `(?<!${urlCharSet})${prefixRegexStr}${escapeStringRegexp(content)}(?!${urlCharSet})`,
+    `(?<!${urlCharSet})${prefixRegexStr}${escapeStringRegexp(
+      content,
+    )}(?!${urlCharSet})`,
     "g",
   );
 }
@@ -49,4 +52,31 @@ export function rewriteResourceLinks(
     }
   }
   return outerHTML;
+}
+
+export function normalizeSameSiteHref(dom: JSDOM, origin: string) {
+  dom.window.document.querySelectorAll("a").forEach((el) => {
+    if (el.href) {
+      try {
+        const url = new URL(el.href, origin);
+        if (url.origin === origin) {
+          let pathname = url.pathname ? url.pathname : "/";
+          // handle extensions like .php, .asp, .aspx, etc
+          const ext = pathname.split("/").pop()?.split(".").pop();
+          if (
+            ext &&
+            ext !== "html" &&
+            ext !== "htm" &&
+            !pathname.endsWith("/")
+          ) {
+            pathname = pathname.slice(0, pathname.length - ext.length) + "html";
+          }
+          const newHref = pathname + url.search + url.hash;
+          el.setAttribute("href", newHref || "#");
+        }
+      } catch (e) {
+        // Ignore invalid URLs
+      }
+    }
+  });
 }
