@@ -1,19 +1,14 @@
 import chokidar from "chokidar";
 import { exec } from "child_process";
 
-const ignored = [
-  "package.json",
-  "package-lock.json",
-  "watch.js",
-  "esbuild.config.js",
-  "copy.sh",
-];
+const ignored = ["package.json", "package-lock.json", "esbuild.config.js"];
 
 const copyIgnoreMatcher = (path) => {
   if (
     ignored.includes(path) ||
     path.startsWith("node_modules/") ||
     path.startsWith("dist/") ||
+    path.startsWith("scripts/") ||
     path.startsWith(".")
   )
     return true;

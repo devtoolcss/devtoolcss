@@ -16,7 +16,8 @@
     "js-beautify": "^1.15.4"
   },
   "scripts": {
-    "build": "bash copy.sh && node esbuild.config.js",
-    "watch": "node watch.js"
+    "build": "bash scripts/copy.sh && node scripts/esbuild.config.js",
+    "watch": "node scripts/watch.js",
+    "sync:manifest": "node scripts/sync-manifest.js"
   }
 }
