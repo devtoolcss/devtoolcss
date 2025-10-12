@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "bash scripts/copy.sh && node scripts/esbuild.config.js",
+    "prepare": "pnpm build",
     "watch": "node scripts/watch.js",
     "sync:manifest": "node scripts/sync-manifest.js"
   }
