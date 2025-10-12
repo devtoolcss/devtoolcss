@@ -8,6 +8,6 @@ A Chrome DevTool extension that exports any components with CSS inlined.
 
 (Under review in Chrome Web Store.)
 
-1. Download `uiexport.zip` from release
+1. Download `uiexport.zip` from [releases](https://github.com/devtoolcss/devtoolcss/releases)
 2. `unzip uiexport.zip -d uiexport`
 3. Load unpacked `uiexport` in `chrome://extensions/`
