@@ -17,7 +17,7 @@ However, Devtool can always provide the exact styles applied during rendering. K
 
 ## TODO
 
-1. Modularize: break `packages/core` into `packages/parser` and `packages/inliner`.
+1. Modularize: split inlining stuff from `packages/parser` to `packages/inliner`.
 
    While [DevTools frontend](https://github.com/ChromeDevTools/devtools-frontend) has the most complete parsing logic that handles many quirks, it is too heavy and is entangled with the tool.
 
