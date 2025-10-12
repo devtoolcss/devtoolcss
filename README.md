@@ -4,10 +4,10 @@
 
 Currently there are two applications focusing on inlining:
 
-| App                                       | Description                                                               |
-| ----------------------------------------- | ------------------------------------------------------------------------- |
-| [UI Export](./packages/chrome-extension/) | A Chrome DevTool extension that exports any components with CSS inlined.  |
-| [cleanclone](./packages/crawler/)         | A cli crawler that inlilnes CSS, downloads resources, and rewrites links. |
+| App                                  | Description                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| [UI Export](./packages/uiexport/)    | A Chrome DevTool extension that exports any components with CSS inlined.  |
+| [cleanclone](./packages/cleanclone/) | A cli crawler that inlilnes CSS, downloads resources, and rewrites links. |
 
 ## Motivation
 

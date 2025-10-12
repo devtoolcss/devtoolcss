@@ -4,12 +4,10 @@ A Chrome DevTool extension that exports any components with CSS inlined.
 
 ![Cover Image](./assets/cover.png)
 
-Currently under review in Chrome Web Store.
+## Install
 
-# Dev
+(Under review in Chrome Web Store.)
 
-```
-npm run build
-```
-
-Then load unpacked `./dist` in `chrome://extensions/`
+1. Download `uiexport.zip` from release
+2. `unzip uiexport.zip -d uiexport`
+3. Load unpacked `uiexport` in `chrome://extensions/`
