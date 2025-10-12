@@ -25,7 +25,7 @@ jobs:
 
       - name: Zip dist/uiexport
         run: |
-          cd packages/uiexport/dist && zip -r uiexport.zip .
+          cd packages/uiexport/dist && zip -r uiexport.zip . && mv uiexport.zip ../../..
       - name: Upload extension to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
