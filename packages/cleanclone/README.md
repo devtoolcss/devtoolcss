@@ -28,7 +28,7 @@ npm i -g cleanclone
 from source (latest):
 
 ```
-# at packages/crawler/
+# at packages/cleanclone
 npm i
 npm link
 ```
