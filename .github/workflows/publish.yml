@@ -21,7 +21,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm -r publish
+      - run: pnpm -r publish --no-git-checks
 
       - name: Zip dist/uiexport
         run: |
