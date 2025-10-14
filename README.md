@@ -4,10 +4,10 @@
 
 Currently there are two applications focusing on inlining:
 
-| App                                  | Description                                                               | Release                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [UI Export](./packages/uiexport/)    | A Chrome DevTool extension that exports any components with CSS inlined.  | [releases](https://github.com/devtoolcss/devtoolcss/releases)                                       |
-| [cleanclone](./packages/cleanclone/) | A cli crawler that inlilnes CSS, downloads resources, and rewrites links. | [![NPM Version](https://img.shields.io/npm/v/cleanclone)](https://www.npmjs.com/package/cleanclone) |
+| App                                  | Description                                                               | Release                                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [UI Export](./packages/uiexport/)    | A Chrome DevTool extension that exports any components with CSS inlined.  | [![Chrome Web Store Version](https://img.shields.io/chrome-web-store/v/igoidllafhdiolciggebbokmhfmpdalo)](https://chromewebstore.google.com/detail/ui-export/igoidllafhdiolciggebbokmhfmpdalo) |
+| [cleanclone](./packages/cleanclone/) | A cli crawler that inlilnes CSS, downloads resources, and rewrites links. | [![NPM Version](https://img.shields.io/npm/v/cleanclone)](https://www.npmjs.com/package/cleanclone)                                                                                            |
 
 ## Motivation
 
