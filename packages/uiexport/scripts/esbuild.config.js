@@ -12,6 +12,6 @@ const commonOptions = {
 
 build({
   ...commonOptions,
-  sourcemap: isProd,
+  sourcemap: !isProd,
   minify: isProd,
 }).catch(() => process.exit(1));
