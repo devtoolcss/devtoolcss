@@ -342,7 +342,7 @@ async function getChildren(node) {
   const childrenPromise = new Promise((resolve) => {
     // if no children to request, also good
     const timeoutId = setTimeout(() => {
-      chrome.debugger.onEvent.addListener(handler);
+      chrome.debugger.onEvent.removeListener(handler);
       resolve();
     }, 500);
 
