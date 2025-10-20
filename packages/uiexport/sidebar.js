@@ -185,9 +185,13 @@ async function setIdAttrs(node) {
   let id = `node-${node.nodeId}`;
   let hasId = false;
   if (!node.attributes) {
-    const { attributes } = await DOM.getAttributes({
-      nodeId: node.nodeId,
-    });
+    const { attributes } = await chrome.debugger.sendCommand(
+      target,
+      "DOM.getAttributes",
+      {
+        nodeId: node.nodeId,
+      },
+    );
     node.attributes = attributes;
   }
   for (let i = 0; i < node.attributes.length; i += 2) {
