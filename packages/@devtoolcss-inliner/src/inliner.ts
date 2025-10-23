@@ -406,6 +406,9 @@ function inlineStyle(
   cssAttr = "data-css",
   removeAttr = true,
 ) {
+  // clean scripts/styles/links
+  document.querySelectorAll("script, link, style").forEach((el) => el.remove());
+
   const elements = document.querySelectorAll(`[${cssAttr}]`);
   for (const el of elements) {
     const cssText = el.getAttribute(cssAttr);

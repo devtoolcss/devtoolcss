@@ -442,6 +442,7 @@ export class Crawler extends EventEmitter {
     await CSS.enable();
     await Page.enable();
     await Network.enable();
+    // must need somehow, otherwise crash
     if (!this.cfg.headless) await Overlay.enable();
     // Runtime no need to enable if not using events
 
@@ -590,11 +591,6 @@ export class Crawler extends EventEmitter {
       mediaConditions.push(cond);
     }
     return mediaConditions;
-  }
-
-  private cleanTags(document: Document) {
-    const toClean = document.querySelectorAll("script, link, style");
-    toClean.forEach((el) => el.remove());
   }
 
   private onError = (e: any) => {
