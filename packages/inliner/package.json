@@ -1,7 +1,7 @@
 {
-  "name": "@devtoolcss/parser",
-  "version": "0.0.8",
-  "description": "",
+  "name": "@devtoolcss/inliner",
+  "version": "0.0.0",
+  "description": "A CSS inliner library powered by Chrome DevTools Protocol.",
   "license": "MIT",
   "files": [
     "dist/",
@@ -14,9 +14,10 @@
   },
   "homepage": "https://github.com/devtoolcss/devtoolcss#readme",
   "keywords": [
+    "devtools-protocol",
+    "inline",
     "css",
-    "html",
-    "devtools-protocol"
+    "html"
   ],
   "publishConfig": {
     "provenance": true
@@ -32,6 +33,13 @@
   "scripts": {
     "build": "tsc",
     "prepare": "pnpm build"
+  },
+  "dependencies": {
+    "@devtoolcss/parser": "workspace:*",
+    "@devtoolcss/inspector": "workspace:*",
+    "css-what": "^7.0.0",
+    "postcss": "^8.5.6",
+    "postcss-var-replace": "^1.0.0"
   },
   "devDependencies": {
     "devtools-protocol": "^0.0.1528500"

@@ -18,9 +18,12 @@ importers:
 
   packages/cleanclone:
     dependencies:
-      '@devtoolcss/parser':
+      '@devtoolcss/inliner':
         specifier: workspace:*
-        version: link:../parser
+        version: link:../inliner
+      '@devtoolcss/inspector':
+        specifier: workspace:*
+        version: link:../inspector
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -30,9 +33,6 @@ importers:
       chrome-remote-interface:
         specifier: ^0.33.3
         version: 0.33.3
-      css-what:
-        specifier: ^7.0.0
-        version: 7.0.0
       escape-html:
         specifier: ^1.0.3
         version: 1.0.3
@@ -48,12 +48,6 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
-      postcss:
-        specifier: ^8.5.6
-        version: 8.5.6
-      postcss-var-replace:
-        specifier: ^1.0.0
-        version: 1.0.0(postcss@8.5.6)
       react:
         specifier: ^19.1.1
         version: 19.2.0
@@ -83,20 +77,36 @@ importers:
         specifier: 0.0.927104
         version: 0.0.927104
 
-  packages/parser:
+  packages/inliner:
     dependencies:
+      '@devtoolcss/inspector':
+        specifier: workspace:*
+        version: link:../inspector
+      '@devtoolcss/parser':
+        specifier: workspace:*
+        version: link:../parser
       css-what:
         specifier: ^7.0.0
         version: 7.0.0
-      jsdom:
-        specifier: ^26.1.0
-        version: 26.1.0
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
       postcss-var-replace:
         specifier: ^1.0.0
         version: 1.0.0(postcss@8.5.6)
+    devDependencies:
+      devtools-protocol:
+        specifier: ^0.0.1528500
+        version: 0.0.1528500
+
+  packages/inspector:
+    dependencies:
+      '@devtoolcss/parser':
+        specifier: workspace:*
+        version: link:../parser
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
     devDependencies:
       '@types/chrome':
         specifier: ^0.1.24
@@ -105,17 +115,26 @@ importers:
         specifier: ^21.1.7
         version: 21.1.7
       devtools-protocol:
-        specifier: ^0.0.1528500
-        version: 0.0.1528500
+        specifier: ^0.0.1532728
+        version: 0.0.1532728
       puppeteer-core:
         specifier: ^24.25.0
         version: 24.25.0
 
+  packages/parser:
+    devDependencies:
+      devtools-protocol:
+        specifier: ^0.0.1528500
+        version: 0.0.1528500
+
   packages/uiexport:
     dependencies:
-      '@devtoolcss/parser':
+      '@devtoolcss/inliner':
         specifier: workspace:*
-        version: link:../parser
+        version: link:../inliner
+      '@devtoolcss/inspector':
+        specifier: workspace:*
+        version: link:../inspector
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -712,6 +731,9 @@ packages:
 
   devtools-protocol@0.0.1528500:
     resolution: {integrity: sha512-zWbI0sZQngmekg5M5t585E03Ih/OaRyH58QR5lVgYZ5bkFyZP9EjcF+41lvl/OAwvo5JYzKOCqf4bwvIyKDOoQ==}
+
+  devtools-protocol@0.0.1532728:
+    resolution: {integrity: sha512-DVHDGmkJFVNGuIUnqsDQ3jimhfldhyoxbqBoHNFM3Z1svvEizG++LD2kmXXGZyvW12opuJlRSlfO0kL3Bh5tjA==}
 
   devtools-protocol@0.0.927104:
     resolution: {integrity: sha512-5jfffjSuTOv0Lz53wTNNTcCUV8rv7d82AhYcapj28bC2B5tDxEZzVb7k51cNxZP2KHw24QE+sW7ZuSeD9NfMpA==}
@@ -2089,6 +2111,8 @@ snapshots:
   devtools-protocol@0.0.1508733: {}
 
   devtools-protocol@0.0.1528500: {}
+
+  devtools-protocol@0.0.1532728: {}
 
   devtools-protocol@0.0.927104: {}
 

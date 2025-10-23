@@ -1,5 +1,5 @@
 import { Protocol } from "devtools-protocol";
-export const highlightConfig: Protocol.Overlay.HighlightConfig = {
+const highlightConfig: Protocol.Overlay.HighlightConfig = {
   showInfo: true,
   showRulers: false,
   showStyles: false,
@@ -194,3 +194,5 @@ export const highlightConfig: Protocol.Overlay.HighlightConfig = {
     a: 0.6,
   },
 };
+
+export default highlightConfig;

@@ -1,11 +1,11 @@
-import { CDPNodeType } from "./constants.js";
-
 export type DOMNode<N> = {
   nodeType: number;
-  children?: Array<N> | null | undefined;
+  children?: Array<N>;
 };
 
 // travserse ELEMENT_NODEs only
+const ELEMENT_NODE = 1;
+
 export async function traverse<N extends DOMNode<N>>(
   node: N,
   callback: (node: N, depth?: number) => Promise<void> | void,
@@ -14,7 +14,7 @@ export async function traverse<N extends DOMNode<N>>(
   parallel = false,
 ) {
   async function _traverse(node: N, depth: number) {
-    if (node.nodeType !== CDPNodeType.ELEMENT_NODE) return;
+    if (node.nodeType !== ELEMENT_NODE) return;
     if (maxDepth >= 0 && depth > maxDepth) return;
     try {
       await callback(node, depth);

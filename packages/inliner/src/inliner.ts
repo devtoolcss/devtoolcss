@@ -1,21 +1,18 @@
 import postcss from "postcss";
 import { postcssVarReplace } from "postcss-var-replace";
-import type { PseudoElement, PseudoSelector, Selector } from "css-what";
+import * as CSSwhat from "css-what";
+import type { Node, Screen } from "@devtoolcss/inspector";
 import type {
-  NodeWithId,
   ParsedCSS,
   ParsedCSSPropertyObject,
   ParsedCSSRules,
   ParsedCSSPropertyValue,
-  Screen,
-} from "./types.js";
-import { Inspector } from "./Inspector.js";
-import * as CSSwhat from "css-what";
+} from "@devtoolcss/parser";
+import { Inspector, CDPNodeType } from "@devtoolcss/inspector";
+import { iterateParsedCSS, traverse } from "@devtoolcss/parser";
+import { forciblePseudoClasses } from "./constants.js";
 
-import { iterateParsedCSS } from "./css_parser.js";
-import { inlineStyle } from "./inlineStyle.js";
-import { traverse } from "./traverse.js";
-import { CDPNodeType, forciblePseudoClasses } from "./constants.js";
+type NodeWithId = Node & { id: string; children?: NodeWithId[] };
 
 type ParsedCSSRulesObjValue = {
   [selector: string]: ParsedCSSPropertyObject;
@@ -25,14 +22,20 @@ type ParsedStyleSheetObjValue = {
   [mediaKey: string]: ParsedCSSRulesObjValue;
 };
 
-function getNormalizedSuffix(parsedSelector: Selector[]): string {
+type InlineOptions = {
+  highlightNode?: boolean;
+  customScreens?: Screen[];
+  mediaConditions?: string[];
+};
+
+function getNormalizedSuffix(parsedSelector: CSSwhat.Selector[]): string {
   const pseudoClasses = [];
   let pseudoElement = null;
   for (let i = parsedSelector.length - 1; i >= 0; --i) {
     const selector = parsedSelector[i];
     if (selector.type === "pseudo") {
       // type to PseudoSelector
-      const pseudo = selector as PseudoSelector;
+      const pseudo = selector as CSSwhat.PseudoSelector;
       if (!pseudo.data && pseudo.name !== "root") {
         // exclude functional pseudo-classes and :root
         pseudoClasses.push(":" + pseudo.name);
@@ -44,7 +47,7 @@ function getNormalizedSuffix(parsedSelector: Selector[]): string {
       selector.name !== "attributes"
     ) {
       // type to PseudoElement
-      pseudoElement = "::" + (selector as PseudoElement).name;
+      pseudoElement = "::" + (selector as CSSwhat.PseudoElement).name;
     } else {
       break;
     }
@@ -82,7 +85,7 @@ function toStyleSheet(
 
 //A pseudo-element must appear after all the other components in the complex or compound selector.
 
-function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
+function hasNonFuncPseudoClass(parsedSelector: CSSwhat.Selector[]): boolean {
   for (const node of parsedSelector) {
     if (node.type === "pseudo" && node.name !== "root") {
       if (!node.data) return true;
@@ -239,7 +242,7 @@ function toInlineRules(parsed: ParsedCSS, id: string): ParsedCSSRulesObjValue {
   return cascade(rules);
 }
 
-export function getInlineText(
+function getInlineText(
   node: NodeWithId,
   parsedCSSs: ParsedCSS[],
   mediaConditions: string[],
@@ -398,13 +401,73 @@ function mergeTrees(roots: NodeWithId[], nScreens: number): NodeWithId {
   return mergedRoot;
 }
 
-export type InlineOptions = {
-  highlightNode?: boolean;
-  customScreens?: Screen[];
-  mediaConditions?: string[];
-};
+function inlineStyle(
+  document: Document, // JSDOM or browser DOM
+  cssAttr = "data-css",
+  removeAttr = true,
+) {
+  const elements = document.querySelectorAll(`[${cssAttr}]`);
+  for (const el of elements) {
+    const cssText = el.getAttribute(cssAttr);
+    if (cssText) {
+      const isStyleSheet = cssText.includes("{");
+      if (isStyleSheet) {
+        // inline style can contain variables and override resolved stylesheet
+        (el as HTMLElement).removeAttribute("style");
 
-export async function getInlinedComponent(
+        const styleEl = document.createElement("style");
+        styleEl.textContent = cssText;
+        // keep here for stringify and eval
+        const noChildTags = [
+          // void elements
+          // https://developer.mozilla.org/en-US/docs/Glossary/Void_element
+          "AREA",
+          "BASE",
+          "BR",
+          "COL",
+          "EMBED",
+          "HR",
+          "IMG",
+          "INPUT",
+          "LINK",
+          "META",
+          "PARAM",
+          "SOURCE",
+          "TRACK",
+          "WBR",
+          // some others
+          "TEXTAREA",
+          "IFRAME",
+          "TITLE",
+          "SCRIPT",
+          "STYLE",
+        ];
+        if (noChildTags.includes(el.tagName) || el.children.length === 0) {
+          // prevent break :empty for those with no children
+          // still may break :nth-child()
+          el.parentNode.insertBefore(styleEl, el);
+        } else {
+          el.insertBefore(styleEl, el.children[0]);
+        }
+      } else {
+        // inline style
+        // JSDOM CSSOM is buggy, directly set style attr
+        (el as HTMLElement).setAttribute("style", cssText);
+      }
+
+      // cleanup attrs
+      if (removeAttr) {
+        Array.from(el.attributes).forEach((attr) => {
+          if (attr.name === cssAttr) {
+            el.removeAttribute(attr.name);
+          }
+        });
+      }
+    }
+  }
+}
+
+async function getInlinedComponent(
   selector: string,
   inspector: Inspector,
   onError: (e: any) => void = () => {},
@@ -481,3 +544,5 @@ export async function getInlinedComponent(
   inlineStyle(doc);
   return doc;
 }
+
+export { InlineOptions, getInlinedComponent };

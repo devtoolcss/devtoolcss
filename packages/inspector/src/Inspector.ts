@@ -1,12 +1,11 @@
 import {
   parseGetMatchedStylesForNodeResponse,
-  ParseOptions,
-} from "./css_parser.js";
-import { traverse } from "./traverse.js";
+  traverse,
+} from "@devtoolcss/parser";
 import { CDPNodeType } from "./constants.js";
 import EventEmitter from "./EventEmitter.js";
-import { Screen } from "./types.js";
-import { highlightConfig } from "./highlightConfig.js";
+import { Node, CDPClient, Progress, InspectOptions } from "./types.js";
+import highlightConfig from "./highlightConfig.js";
 
 let JSDOM: any = null;
 
@@ -14,37 +13,6 @@ if (typeof window === "undefined") {
   const s = "jsdom"; // somehow have to do this to avoid bundler issue
   JSDOM = (await import(s)).JSDOM;
 }
-
-type Node = {
-  nodeId: number;
-  nodeType: number;
-  localName: string;
-  attributes?: string[];
-  children?: Node[];
-  [key: string]: any; // Allow any other properties
-};
-
-type CDPClient = {
-  send: (method: string, params?: object) => Promise<any>;
-  on: (event: string, callback: (data: any) => void) => void;
-  off: (event: string, callback: (data: any) => void) => void;
-  // for removal EventEmitter with .off for puppeteer,
-  // off function for chrome-remote-interface
-};
-
-type Progress = {
-  completed: number;
-  total: number;
-};
-
-export type InspectOptions = {
-  depth?: number;
-  raw?: boolean;
-  parseOptions?: ParseOptions;
-  customScreen?: Screen;
-  beforeGetMatchedStyle?: (node: Node, inspector: Inspector) => Promise<void>;
-  afterGetMatchedStyle?: (node: Node, inspector: Inspector) => Promise<void>;
-};
 
 function findNodeIdx(nodes: Node[], nodeId: number): number {
   for (let i = 0; i < nodes.length; i++) {

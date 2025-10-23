@@ -1,7 +1,7 @@
 {
-  "name": "@devtoolcss/parser",
-  "version": "0.0.8",
-  "description": "",
+  "name": "@devtoolcss/inspector",
+  "version": "0.0.0",
+  "description": "A lightweight implementation for inspecting CSS and HTML programmatically.",
   "license": "MIT",
   "files": [
     "dist/",
@@ -14,9 +14,9 @@
   },
   "homepage": "https://github.com/devtoolcss/devtoolcss#readme",
   "keywords": [
+    "devtools-protocol",
     "css",
-    "html",
-    "devtools-protocol"
+    "html"
   ],
   "publishConfig": {
     "provenance": true
@@ -33,7 +33,14 @@
     "build": "tsc",
     "prepare": "pnpm build"
   },
+  "dependencies": {
+    "@devtoolcss/parser": "workspace:*",
+    "jsdom": "^26.1.0"
+  },
   "devDependencies": {
-    "devtools-protocol": "^0.0.1528500"
+    "@types/chrome": "^0.1.24",
+    "@types/jsdom": "^21.1.7",
+    "devtools-protocol": "^0.0.1532728",
+    "puppeteer-core": "^24.25.0"
   }
 }

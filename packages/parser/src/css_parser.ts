@@ -1,23 +1,27 @@
+import type { Protocol } from "devtools-protocol";
+
+type RuleMatch = Protocol.CSS.RuleMatch;
+type CSSStyle = Protocol.CSS.CSSStyle;
+type GetMatchedStylesForNodeResponse =
+  Protocol.CSS.GetMatchedStylesForNodeResponse;
+
 import type {
   ParsedCSSRules,
-  RuleMatch,
-  CSSStyle,
   ParsedCSSPropertyValue,
-  GetMatchedStylesForNodeResponse,
   ParsedCSS,
   ParsedCSSPropertyObject,
 } from "./types.js";
 
-import { inheritableProperties } from "./constants.js";
+import inheritableProperties from "./inheritableProperties.js";
+
+function isInheritableProperty(propName: string): boolean {
+  return propName.startsWith("--") || inheritableProperties.includes(propName);
+}
 
 export type ParseOptions = {
   excludeOrigin?: string[];
   removeUnusedVar?: boolean;
 };
-
-function isInheritableProperty(propName: string): boolean {
-  return propName.startsWith("--") || inheritableProperties.includes(propName);
-}
 
 export function parseCSSProperties(
   cssStyle: CSSStyle,

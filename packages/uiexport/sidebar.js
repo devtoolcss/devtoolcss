@@ -1,6 +1,7 @@
 /// <reference types="chrome"/>
 
-import { Inspector, getInlinedComponent } from "@devtoolcss/parser";
+import { Inspector } from "@devtoolcss/inspector";
+import { getInlinedComponent } from "@devtoolcss/inliner";
 
 import { getUniqueSelector } from "./selector.js";
 

@@ -3,9 +3,8 @@ import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
-import { Inspector, getInlinedComponent } from "@devtoolcss/parser";
-import type { Screen } from "@devtoolcss/parser";
-import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
+import { Inspector, type Screen } from "@devtoolcss/inspector";
+import { getInlinedComponent } from "@devtoolcss/inliner";
 import {
   getAvailableFilename,
   getFilename,
