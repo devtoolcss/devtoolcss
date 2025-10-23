@@ -62,14 +62,15 @@ export function normalizeSameSiteHref(doc: Document, origin: string) {
         if (url.origin === origin) {
           let pathname = url.pathname ? url.pathname : "/";
           // handle extensions like .php, .asp, .aspx, etc
-          const ext = pathname.split("/").pop()?.split(".").pop();
+          const ext = path.posix.extname(pathname); // remove dot
           if (
             ext &&
-            ext !== "html" &&
-            ext !== "htm" &&
+            ext !== ".html" &&
+            ext !== ".htm" &&
             !pathname.endsWith("/")
           ) {
-            pathname = pathname.slice(0, pathname.length - ext.length) + "html";
+            pathname =
+              pathname.slice(0, pathname.length - ext.length) + ".html";
           }
           const newHref = pathname + url.search + url.hash;
           el.setAttribute("href", newHref || "#");
