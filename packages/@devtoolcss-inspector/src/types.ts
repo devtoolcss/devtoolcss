@@ -33,6 +33,19 @@ export type InspectOptions = {
   raw?: boolean;
   parseOptions?: ParseOptions;
   customScreen?: Screen;
-  beforeGetMatchedStyle?: (node: Node, inspector: Inspector) => Promise<void>;
-  afterGetMatchedStyle?: (node: Node, inspector: Inspector) => Promise<void>;
+  beforeTraverse?: (
+    rootNode: Node,
+    inspector: Inspector,
+    rootElement: Element,
+  ) => Promise<void>;
+  beforeGetMatchedStyle?: (
+    node: Node,
+    inspector: Inspector,
+    rootElement: Element,
+  ) => Promise<void>;
+  afterGetMatchedStyle?: (
+    node: Node,
+    inspector: Inspector,
+    rootElement: Element,
+  ) => Promise<void>;
 };

@@ -345,6 +345,7 @@ export class Inspector extends EventEmitter {
       raw = false,
       parseOptions = {},
       customScreen,
+      beforeTraverse,
       beforeGetMatchedStyle,
       afterGetMatchedStyle,
     } = options;
@@ -396,16 +397,17 @@ export class Inspector extends EventEmitter {
     this.emitProgress({ completed: 0, total: totalElements });
 
     let completed = 0;
+    beforeTraverse?.(node, this, el);
     await traverse(
       node,
       async (node) => {
-        await beforeGetMatchedStyle?.(node, this);
+        await beforeGetMatchedStyle?.(node, this, el);
 
         const styles = await this.sendCommand("CSS.getMatchedStylesForNode", {
           nodeId: node.nodeId,
         });
 
-        await afterGetMatchedStyle?.(node, this);
+        await afterGetMatchedStyle?.(node, this, el);
 
         if (raw) {
           node.css = styles;

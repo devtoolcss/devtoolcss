@@ -1,7 +1,6 @@
 import postcss from "postcss";
 import { postcssVarReplace } from "postcss-var-replace";
 import * as CSSwhat from "css-what";
-import type { Node, Screen } from "@devtoolcss/inspector";
 import type {
   ParsedCSS,
   ParsedCSSPropertyObject,
@@ -11,131 +10,24 @@ import type {
 import { Inspector, CDPNodeType } from "@devtoolcss/inspector";
 import { iterateParsedCSS, traverse } from "@devtoolcss/parser";
 import { forciblePseudoClasses } from "./constants.js";
+import {
+  AriaExpandedOptimizer,
+  PrunePsuedoElementOptimizer,
+  invokeOptimizers,
+} from "./optimizers/index.js";
 
-type NodeWithId = Node & { id: string; children?: NodeWithId[] };
-
-type ParsedCSSRulesObjValue = {
-  [selector: string]: ParsedCSSPropertyObject;
-};
-
-type ParsedStyleSheetObjValue = {
-  [mediaKey: string]: ParsedCSSRulesObjValue;
-};
-
-type InlineOptions = {
-  highlightNode?: boolean;
-  customScreens?: Screen[];
-  mediaConditions?: string[];
-};
-
-function getNormalizedSuffix(parsedSelector: CSSwhat.Selector[]): string {
-  const pseudoClasses = [];
-  let pseudoElement = null;
-  for (let i = parsedSelector.length - 1; i >= 0; --i) {
-    const selector = parsedSelector[i];
-    if (selector.type === "pseudo") {
-      // type to PseudoSelector
-      const pseudo = selector as CSSwhat.PseudoSelector;
-      if (!pseudo.data && pseudo.name !== "root") {
-        // exclude functional pseudo-classes and :root
-        pseudoClasses.push(":" + pseudo.name);
-      }
-    } else if (
-      selector.type === "pseudo-element" &&
-      // custom selectors
-      selector.name !== "inline" &&
-      selector.name !== "attributes"
-    ) {
-      // type to PseudoElement
-      pseudoElement = "::" + (selector as CSSwhat.PseudoElement).name;
-    } else {
-      break;
-    }
-  }
-  pseudoClasses.sort();
-  return pseudoClasses.join("") + (pseudoElement ? pseudoElement : "");
-}
-
-function toStyleSheet(
-  styleJSON: ParsedCSSRulesObjValue,
-  mediaCondition: string = "",
-) {
-  let stylesheet = "";
-  for (const [selector, rules] of Object.entries(styleJSON)) {
-    const decls = Object.entries(rules)
-      .map(
-        ([prop, val]) =>
-          `${prop}: ${val.value}${val.important ? " !important" : ""};`,
-      )
-      .join("");
-    stylesheet += `${selector} {${decls}}`;
-  }
-  if (mediaCondition) {
-    stylesheet = `@media ${mediaCondition} {${stylesheet}}`;
-  }
-  return stylesheet;
-}
-
-/**
- * Normalize the pseudo-class/element suffix:
- * - Removes functional pseudo-classes (e.g. :not(), :nth-child())
- * - Sorts pseudo-classes/elements alphabetically
- * - Keeps only the pseudo part (e.g. ":hover", "::before")
- */
-
-//A pseudo-element must appear after all the other components in the complex or compound selector.
-
-function hasNonFuncPseudoClass(parsedSelector: CSSwhat.Selector[]): boolean {
-  for (const node of parsedSelector) {
-    if (node.type === "pseudo" && node.name !== "root") {
-      if (!node.data) return true;
-
-      if (Array.isArray(node.data) && node.name !== "not") {
-        for (const selector of node.data) {
-          if (hasNonFuncPseudoClass(selector)) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-function removeIneffectivePseudoElem(
-  node: NodeWithId,
-  parsedRules: ParsedCSSRulesObjValue,
-) {
-  for (const [selector, properties] of Object.entries(parsedRules)) {
-    const suffix = getNormalizedSuffix(CSSwhat.parse(selector)[0]);
-    if (suffix.endsWith("before") || suffix.endsWith("after")) {
-      for (const [prop, val] of Object.entries(properties)) {
-        if (
-          prop === "content" &&
-          (val.value === "normal" || val.value === '""' || val.value === "''")
-        ) {
-          delete parsedRules[selector];
-        }
-      }
-    } else if (suffix.endsWith("marker")) {
-      if (node.localName !== "li") {
-        delete parsedRules[selector];
-      }
-    } else if (suffix.endsWith("backdrop")) {
-      const canHaveBackdrop = [
-        "dialog",
-        "div",
-        "section",
-        "article",
-        "main",
-        "aside",
-        "video",
-        "img",
-        "canvas",
-        "iframe",
-      ].includes(node.localName);
-      if (!canHaveBackdrop) delete parsedRules[selector];
-    }
-  }
-}
+import type {
+  NodeWithId,
+  ParsedCSSRulesObjValue,
+  ParsedStyleSheetObjValue,
+  InlineOptions,
+} from "./types.js";
+import {
+  getNormalizedSuffix,
+  toStyleSheet,
+  hasNonFuncPseudoClass,
+} from "./utils.js";
+import type { Optimizer } from "./optimizers/optimizer.js";
 
 function getRewrittenSelectors(
   idSelector: string,
@@ -222,7 +114,7 @@ function cascade(rules: ParsedCSSRules): ParsedCSSRulesObjValue {
   return cascaded;
 }
 
-function toInlineRules(parsed: ParsedCSS, id: string): ParsedCSSRulesObjValue {
+function rewriteSelectors(parsed: ParsedCSS, id: string): ParsedCSSRules {
   const rules: ParsedCSSRules = {};
   iterateParsedCSS(parsed, (values, selectorList, context) => {
     const idSelector = `#${id}`;
@@ -239,21 +131,23 @@ function toInlineRules(parsed: ParsedCSS, id: string): ParsedCSSRulesObjValue {
       });
     }
   });
-  return cascade(rules);
+  return rules;
 }
 
 function getInlineText(
   node: NodeWithId,
   parsedCSSs: ParsedCSS[],
   mediaConditions: string[],
+  optimizers: Optimizer[],
 ) {
   const mediaRules: ParsedStyleSheetObjValue = {};
   for (let i = 0; i < parsedCSSs.length; i++) {
     const parsed = parsedCSSs[i];
-    const rules: ParsedCSSRulesObjValue = toInlineRules(parsed, node.id!);
-    removeIneffectivePseudoElem(node, rules);
+    const rules = rewriteSelectors(parsed, node.id!);
+    invokeOptimizers(optimizers, "afterRewriteSelectors", node, rules);
+    const inlineRules = cascade(rules);
 
-    mediaRules[mediaConditions[i]] = replaceVariables(rules);
+    mediaRules[mediaConditions[i]] = replaceVariables(inlineRules);
   }
 
   const sharedCSS: ParsedCSSRulesObjValue = {};
@@ -487,31 +381,61 @@ async function getInlinedComponent(
     );
   }
 
+  const optimizers = [
+    new AriaExpandedOptimizer(),
+    new PrunePsuedoElementOptimizer(),
+  ];
   const roots = [];
   for (let i = 0; i < customScreens.length; ++i) {
     const node = await inspector.inspect(selector, {
       depth: -1,
       parseOptions: { excludeOrigin: ["user-agent"], removeUnusedVar: true },
       customScreen: customScreens[i],
-      beforeGetMatchedStyle: async (node, inspector) => {
+      beforeTraverse: async (rootNode, inspector, rootElement) => {
+        await invokeOptimizers(
+          optimizers,
+          "beforeTraverse",
+          rootNode,
+          inspector,
+          rootElement,
+        );
+      },
+      beforeGetMatchedStyle: async (node, inspector, rootElement) => {
         if (highlightNode) {
           const objectId = await inspector.getNodeObjectId(node);
           await inspector.scrollToNode(objectId);
           await inspector.highlightNode(objectId);
         }
-        // force all pseudo classes
+
+        await invokeOptimizers(
+          optimizers,
+          "beforeForcePseudo",
+          node,
+          inspector,
+          rootElement,
+        );
+
+        // Force all pseudo classes
         await inspector.sendCommand("CSS.forcePseudoState", {
           nodeId: node.nodeId,
           forcedPseudoClasses: forciblePseudoClasses,
         });
       },
-      afterGetMatchedStyle: async (node, inspector) => {
-        // cleanup forced pseudo classes
+      afterGetMatchedStyle: async (node, inspector, rootElement) => {
+        await invokeOptimizers(
+          optimizers,
+          "afterForcePseudo",
+          node,
+          inspector,
+          rootElement,
+        );
+
+        // Cleanup forced pseudo classes
         await inspector.sendCommand("CSS.forcePseudoState", {
           nodeId: node.nodeId,
           forcedPseudoClasses: [],
         });
-        //console.log("cleaned forced pseudo classes for node", node.nodeId);
+
         if (highlightNode) {
           await inspector.hideHighlight();
         }
@@ -536,7 +460,21 @@ async function getInlinedComponent(
     root,
     (node) => {
       setIdAttrs(node);
-      const styleText = getInlineText(node, node.css, mediaConditions);
+    },
+    onError,
+    -1,
+    true,
+  );
+  // after all node.id are set
+  await traverse(
+    root,
+    (node) => {
+      const styleText = getInlineText(
+        node,
+        node.css,
+        mediaConditions,
+        optimizers,
+      );
       node.attributes.push("data-css", styleText);
     },
     onError,
