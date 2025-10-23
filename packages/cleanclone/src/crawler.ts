@@ -3,14 +3,8 @@ import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
-import {
-  parseGetMatchedStylesForNodeResponse,
-  getInlineText,
-  traverse,
-  CDPNodeType,
-  inlineStyle,
-  forciblePseudoClasses,
-} from "@devtoolcss/parser";
+import { Inspector, getInlinedComponent } from "@devtoolcss/parser";
+import type { Screen } from "@devtoolcss/parser";
 import type { Node, GetMatchedStylesForNodeResponse } from "./types.js";
 import {
   getAvailableFilename,
@@ -21,7 +15,6 @@ import {
 } from "./file.js";
 import { rewriteResourceLinks, normalizeSameSiteHref } from "./rewrite.js";
 import { getFontRules, getAnchorHref } from "./runtime.js";
-import { highlightNode } from "./highlight.js";
 import {
   getPath,
   getOrigin,
@@ -96,7 +89,8 @@ export class Crawler extends EventEmitter {
   private downloadedURLs = new Set<string>();
   private assetDir = "";
   private fontCSSPath = "";
-  private screens: { width: number; height: number; mobile: boolean }[] = [];
+  private screens: Screen[] = [];
+  private mediaConditions: string[];
   private toHighlight = false;
 
   constructor(cfg: CrawlConfig) {
@@ -105,6 +99,7 @@ export class Crawler extends EventEmitter {
     this.assetDir = path.join(this.cfg.outDir, "assets");
     this.fontCSSPath = path.join(this.cfg.outDir, "fonts.css");
     this.screens = this.buildScreens();
+    this.mediaConditions = this.buildMediaCondition(this.cfg.breakpoints);
     this.toHighlight = this.cfg.overlay && !this.cfg.headless;
   }
 
@@ -375,7 +370,7 @@ export class Crawler extends EventEmitter {
     const removeResponseReceived = Network.on("responseReceived", (param) => {
       const requestId = param.requestId;
       const url = originalURL[requestId]; // TODO: handle error
-      if (url.startsWith("data:")) return;
+      if (!url || url.startsWith("data:")) return;
       const filenamePromise = getFilename(url);
       const mimeType = param.response.mimeType;
       const subtype = mimeType.split("/")[1];
@@ -479,299 +474,31 @@ export class Crawler extends EventEmitter {
       awaitPromise: true,
     });
 
-    const { root: docRoot } = await DOM.getDocument({ depth: 0 });
-    // default 1 will cause later setChildNode parentId not docRoot's
-    // always use requestChildNodes for aligning the usage of devtools
-
-    // Maintain a map for efficient node lookup by nodeId
-    const nodeMap = new Map<number, Node>(); // just for lookup, only add (nodeId unique), no delete
-    const updateQueue: Array<any> = [];
-    const buildNodeMap = (node: Node) => {
-      nodeMap.set(node.nodeId, node);
-      if (node.children) {
-        for (const child of node.children) {
-          buildNodeMap(child);
-        }
-      }
-    };
-
-    // cannot have multiple at a time
-    async function getChildren(node: Node): Promise<void> {
-      const childrenPromise = new Promise<void>((resolve) => {
-        // no children to request, also good
-        const timeoutId = setTimeout(() => {
-          removeListener();
-          resolve();
-        }, 250);
-
-        let removeListener;
-        removeListener = DOM.on("setChildNodes", (params) => {
-          if (node.nodeId !== params.parentId) return;
-          removeListener();
-          node.children = params.nodes;
-          buildNodeMap(node);
-          clearTimeout(timeoutId);
-          resolve();
-        });
-      });
-      DOM.requestChildNodes({
-        nodeId: node.nodeId,
-        depth: -1,
-      });
-      await childrenPromise;
-    }
-
-    await getChildren(docRoot);
-
-    async function processUpdateQueue() {
-      /* currently handled by setTimeout
-      const deletedSet = new Set<number>();
-      for (const param of updateQueue) {
-        if (param["nodeId"] !== undefined) {
-          deletedSet.add(param["nodeId"]);
-        }
-      }
-      */
-
-      async function updateNode(param) {
-        function findNodeIdx(nodes: Node[], nodeId: number): number {
-          for (let i = 0; i < nodes.length; i++) {
-            if (nodes[i].nodeId === nodeId) {
-              return i;
-            }
-          }
-          return null;
-        }
-
-        const parentNode = nodeMap.get(param.parentNodeId);
-        if (parentNode) {
-          if (param["previousNodeId"] !== undefined) {
-            // insert
-            //if (deletedSet.has(param["nodeId"])) return;
-            const prevIdx =
-              param["previousNodeId"] === 0
-                ? -1
-                : findNodeIdx(parentNode.children, param["previousNodeId"]);
-            if (prevIdx !== null) {
-              // describeNode depth -1 is buggy, often return nodeId=0, causing bug
-              // devtools use DOM.requestChildNodes and receive the results from DOM.setChildNodes event
-              parentNode.children.splice(prevIdx + 1, 0, param["node"]);
-
-              // the node from insert event may or maynot have children initialized
-              // hope not partially initialized like describeNode
-
-              // For node (ex: h1) with only a #text child, won't get response
-              // devtool UI also expand the #text as the same level
-              // seems childNodeInserted will handle this by selective providing children
-              // so here checking !node.children is good
-              const node: Node = param["node"];
-              if (
-                node.nodeType === CDPNodeType.ELEMENT_NODE &&
-                node.childNodeCount > 0 &&
-                !node.children
-              ) {
-                await getChildren(node);
-              }
-            }
-          } else {
-            const idx = findNodeIdx(parentNode.children, param["nodeId"]);
-            if (idx !== -1) {
-              parentNode.children.splice(idx, 1);
-            }
-          }
-        }
-      }
-      while (updateQueue.length > 0) {
-        await updateNode(updateQueue.shift());
-      }
-    }
-
-    DOM.on("childNodeInserted", (params) => {
-      updateQueue.push({
-        parentNodeId: params.parentNodeId,
-        previousNodeId: params.previousNodeId,
-        node: params.node,
-      });
-    });
-
-    DOM.on("childNodeRemoved", (params) => {
-      updateQueue.push({
-        parentNodeId: params.parentNodeId,
-        nodeId: params.nodeId,
-      });
-    });
-
-    DOM.on("documentUpdated", () => {
-      throw new Error("Document completely updated, cannot cascade");
-    });
-
-    function getBody(node: Node, depth: number): Node | null {
-      if (node.nodeName.toLowerCase() === "body") return node;
-      else if (depth === 3) return null;
-
-      if (node.children) {
-        for (const child of node.children) {
-          const res = getBody(child, depth + 1);
-          if (res) return res;
-        }
-      }
-    }
-
-    const roots = [];
     this.emitProgress({
-      phase: "crawling",
+      crawlProgress: {
+        deviceIndex: 0,
+        stageIndex: CrawlStages.Cascade,
+        totalElements: 0,
+        processedElements: 0,
+      },
     });
 
-    async function setIdAttrs(node: Node) {
-      let id = `node-${node.nodeId}`;
-      let hasId = false;
-      if (!node.attributes) {
-        const { attributes } = await DOM.getAttributes({
-          nodeId: node.nodeId,
-        });
-        node.attributes = attributes;
-      }
-      for (let i = 0; i < node.attributes.length; i += 2) {
-        if (node.attributes[i] === "id") {
-          id = node.attributes[i + 1];
-          if (id.includes(":")) {
-            // can break selector
-            id = id.replace(/:/g, "-");
-            node.attributes[i + 1] = id;
-          }
-          hasId = true;
-          break;
-        }
-      }
-      if (!hasId) {
-        node.attributes.push("id", id);
-      }
-      node.id = id;
-    }
-
-    for (
-      let deviceIndex = 0;
-      deviceIndex < this.screens.length;
-      deviceIndex++
-    ) {
-      const { width, height, mobile } = this.screens[deviceIndex];
-      await Emulation.setDeviceMetricsOverride({
-        width,
-        height,
-        deviceScaleFactor: this.cfg.deviceScaleFactor,
-        mobile,
-      });
-
+    // @ts-ignore
+    const inspector = Inspector.fromCDPClient(client);
+    inspector.on("progress", ({ completed, total }) => {
       this.emitProgress({
         crawlProgress: {
-          stageIndex: CrawlStages.Load,
-          deviceIndex,
+          processedElements: completed,
+          totalElements: total,
         },
       });
-
-      if (this.cfg.delayAfterNavigateMs) {
-        await new Promise((r) => setTimeout(r, this.cfg.delayAfterNavigateMs));
-      }
-
-      await processUpdateQueue();
-      const root = getBody(docRoot, 0);
-      if (!root) throw new Error("No body element found");
-
-      let totalElements = 0;
-      const initElements = async (node: Node) => {
-        await setIdAttrs(node);
-        node.css = [];
-        totalElements += 1;
-      };
-      await traverse(root, initElements, this.onError, true);
-
-      const dom = this.toJSDOM(root, true);
-
-      const checkChildrenNodeIds = new Set<number>();
-      try {
-        dom.window.document
-          .querySelectorAll("li:has([aria-expanded])")
-          .forEach((el: HTMLElement) => {
-            checkChildrenNodeIds.add(
-              Number(el.attributes["data-nodeId"].value),
-            );
-          });
-      } catch {}
-
-      let processed = 0;
-      await traverse(
-        root,
-        async (node) => {
-          if (this.toHighlight) {
-            await highlightNode(node, DOM, Runtime, Overlay);
-          }
-
-          // collect styles
-          const checkChildren =
-            checkChildrenNodeIds.has(node.nodeId) && node.children;
-          const childrenStyleBefore: GetMatchedStylesForNodeResponse[] = [];
-          const childrenStyleAfter: GetMatchedStylesForNodeResponse[] = [];
-
-          if (checkChildren) {
-            // use for loop to await, forEach will not
-            for (let i = 0; i < node.children.length; ++i) {
-              const child = node.children[i];
-              const childrenStyle = await CSS.getMatchedStylesForNode({
-                nodeId: child.nodeId,
-              });
-              childrenStyleBefore.push(childrenStyle);
-            }
-          }
-
-          await CSS.forcePseudoState({
-            nodeId: node.nodeId,
-            forcedPseudoClasses: forciblePseudoClasses,
-          });
-
-          const styles = await CSS.getMatchedStylesForNode({
-            nodeId: node.nodeId,
-          });
-
-          if (checkChildren) {
-            for (let i = 0; i < node.children.length; ++i) {
-              const child = node.children[i];
-              const childrenStyle = await CSS.getMatchedStylesForNode({
-                nodeId: child.nodeId,
-              });
-              childrenStyleAfter.push(childrenStyle);
-            }
-          }
-
-          await CSS.forcePseudoState({
-            nodeId: node.nodeId,
-            forcedPseudoClasses: [],
-          });
-
-          node.css[deviceIndex] = parseGetMatchedStylesForNodeResponse(styles, {
-            excludeOrigin: ["user-agent"],
-            removeUnusedVar: true,
-          });
-
-          processed += 1;
-          this.emitProgress({
-            crawlProgress: {
-              stageIndex: CrawlStages.Cascade,
-              totalElements,
-              processedElements: processed,
-            },
-          });
-
-          if (this.toHighlight) {
-            setTimeout(() => Overlay.hideHighlight(), 25);
-          }
-        },
-        this.onError,
-        false,
-      );
-
-      const clonedRoot = structuredClone(root);
-      roots.push(clonedRoot);
-    }
+    });
+    inspector.on("error", this.onError);
+    const doc = await getInlinedComponent("body", inspector, this.onError, {
+      customScreens: this.screens,
+      mediaConditions: this.mediaConditions,
+      highlightNode: this.toHighlight,
+    });
 
     // stop recording requests
     // @ts-ignore TODO: fix typing upstream
@@ -782,28 +509,6 @@ export class Crawler extends EventEmitter {
       await new Promise((resolve) => setTimeout(resolve, 500));
       // TODO: progress
     }
-
-    const cdpRoot = this.mergeTrees(roots);
-
-    await traverse(
-      cdpRoot,
-      async (node) => {
-        const inlineText = getInlineText(
-          node,
-          node.css,
-          this.buildMediaCondition(this.cfg.breakpoints),
-        );
-        if (inlineText) {
-          node.attributes.push("data-css", inlineText);
-        }
-      },
-      this.onError,
-      false,
-    );
-
-    const dom = this.toJSDOM(cdpRoot);
-    this.cleanTags(dom.window.document);
-    inlineStyle(dom.window.document, "data-css", true);
 
     // --disable-web-security may help, but unstable and not get all somehow
     const { result: resultFonts } = await Runtime.evaluate({
@@ -839,14 +544,14 @@ export class Crawler extends EventEmitter {
       pageBase = path.dirname(path.join(pagePath, "dummy"));
     }
     const origin = getOrigin(pageURL);
-    normalizeSameSiteHref(dom, origin);
+    normalizeSameSiteHref(doc, origin);
     // Insert the font link tag as the first child of <head>
-    const fontLink = dom.window.document.createElement("link");
+    const fontLink = doc.createElement("link");
     fontLink.rel = "stylesheet";
     fontLink.href = "/fonts.css";
-    const head = dom.window.document.querySelector("head");
+    const head = doc.querySelector("head");
     head.insertBefore(fontLink, head.firstChild);
-    const rawHtml = dom.window.document.documentElement.outerHTML;
+    const rawHtml = doc.documentElement.outerHTML;
     let outerHTML =
       "<!DOCTYPE html>\n" +
       rewriteResourceLinks(origin, pageBase, resources, rawHtml);
@@ -862,14 +567,13 @@ export class Crawler extends EventEmitter {
     await client.close();
   }
 
-  private buildScreens(): { width: number; height: number; mobile: boolean }[] {
-    return this.cfg.deviceWidths.map((width, i) => {
-      return {
-        width,
-        height: this.cfg.screenHeight,
-        mobile: false, // TODO: option? but seems not matter if no touch event
-      };
-    });
+  private buildScreens(): Screen[] {
+    return this.cfg.deviceWidths.map((width) => ({
+      width,
+      height: this.cfg.screenHeight,
+      deviceScaleFactor: this.cfg.deviceScaleFactor,
+      mobile: false, // TODO: option? but seems not matter if no touch event
+    }));
   }
 
   private buildMediaCondition(breakpoints: number[]): string[] {
@@ -887,139 +591,6 @@ export class Crawler extends EventEmitter {
       mediaConditions.push(cond);
     }
     return mediaConditions;
-  }
-
-  private toJSDOM(cdpBody: Node, setNodeId = false) {
-    const dom = new JSDOM("<html><head></head><body></body></html>");
-    const document = dom.window.document;
-
-    const buildNode = (cdpNode: Node, document: Document): HTMLElement => {
-      let node;
-
-      switch (cdpNode.nodeType) {
-        case CDPNodeType.ELEMENT_NODE:
-          // iframe is safe because no children (not setting pierce)
-          node = document.createElement(cdpNode.nodeName.toLowerCase());
-
-          if (Array.isArray(cdpNode.attributes)) {
-            for (let i = 0; i < cdpNode.attributes.length; i += 2) {
-              node.setAttribute(
-                cdpNode.attributes[i],
-                cdpNode.attributes[i + 1],
-              );
-            }
-          }
-          if (setNodeId) {
-            // for selector matching during cascade
-            node.setAttribute("data-nodeId", cdpNode.nodeId);
-          }
-          break;
-
-        case CDPNodeType.TEXT_NODE:
-          node = document.createTextNode(cdpNode.nodeValue || "");
-          break;
-
-        case CDPNodeType.COMMENT_NODE:
-          node = document.createComment(cdpNode.nodeValue || "");
-          break;
-
-        case CDPNodeType.DOCUMENT_NODE:
-          node = document.createElement(cdpNode.nodeName.toLowerCase());
-          if (Array.isArray(cdpNode.attributes)) {
-            for (let i = 0; i < cdpNode.attributes.length; i += 2) {
-              node.setAttribute(
-                cdpNode.attributes[i],
-                cdpNode.attributes[i + 1],
-              );
-            }
-          }
-          return;
-
-        case CDPNodeType.DOCUMENT_TYPE_NODE: // DOCUMENT_TYPE_NODE
-          return null;
-
-        default:
-          this.emitProgress({
-            message: {
-              level: "warning",
-              text: `Unsupported node type: ${cdpNode.nodeType}\n${cdpNode}`,
-            },
-          });
-          return null;
-      }
-
-      // Recursively add children
-      if (cdpNode.children) {
-        for (const child of cdpNode.children) {
-          const childNode = buildNode(child, document);
-          if (childNode) node.appendChild(childNode);
-        }
-      }
-
-      return node;
-    };
-
-    const jsdomRoot = buildNode(cdpBody, document);
-    const htmlNode = document.querySelector("html");
-    htmlNode.replaceChild(jsdomRoot, htmlNode.querySelector("body"));
-    return dom;
-  }
-
-  private mergeTrees(roots: Node[]): Node {
-    const mergedRoot = roots[0];
-    // merge css, filling missing with display: none
-    if (mergedRoot.nodeType === CDPNodeType.ELEMENT_NODE) {
-      for (const root of roots.slice(1)) {
-        for (let i = 0; i < this.screens.length; ++i) {
-          if (root.css[i]) {
-            mergedRoot.css[i] = root.css[i];
-          }
-        }
-      }
-      for (let i = 0; i < this.screens.length; ++i) {
-        if (!mergedRoot.css[i]) {
-          mergedRoot.css[i] = {
-            inherited: [],
-            attributes: [],
-            matched: {},
-            pseudoElementMatched: {},
-            inline: [
-              {
-                name: "display",
-                value: "none",
-                important: false,
-              },
-            ],
-          };
-        }
-      }
-    }
-
-    if (roots.length === 1) {
-      // assume children inherits the display: none
-      // can break if children have some CSS overriding
-      return mergedRoot;
-    }
-
-    const nodeMap = new Map<number, Node[]>();
-
-    for (const root of roots) {
-      if (root.children) {
-        for (const child of root.children) {
-          if (!nodeMap.has(child.nodeId)) {
-            nodeMap.set(child.nodeId, [child]);
-          } else {
-            nodeMap.get(child.nodeId).push(child);
-          }
-        }
-      }
-    }
-
-    mergedRoot.children = [];
-    for (const nodes of nodeMap.values()) {
-      mergedRoot.children.push(this.mergeTrees(nodes));
-    }
-    return mergedRoot;
   }
 
   private cleanTags(document: Document) {

@@ -7,10 +7,15 @@ import type {
   ParsedCSSPropertyObject,
   ParsedCSSRules,
   ParsedCSSPropertyValue,
+  Screen,
 } from "./types.js";
+import { Inspector } from "./Inspector.js";
 import * as CSSwhat from "css-what";
 
 import { iterateParsedCSS } from "./css_parser.js";
+import { inlineStyle } from "./inlineStyle.js";
+import { traverse } from "./traverse.js";
+import { CDPNodeType, forciblePseudoClasses } from "./constants.js";
 
 type ParsedCSSRulesObjValue = {
   [selector: string]: ParsedCSSPropertyObject;
@@ -77,7 +82,7 @@ function toStyleSheet(
 
 //A pseudo-element must appear after all the other components in the complex or compound selector.
 
-export function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
+function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
   for (const node of parsedSelector) {
     if (node.type === "pseudo" && node.name !== "root") {
       if (!node.data) return true;
@@ -92,7 +97,7 @@ export function hasNonFuncPseudoClass(parsedSelector: Selector[]): boolean {
   return false;
 }
 
-export function removeIneffectivePseudoElem(
+function removeIneffectivePseudoElem(
   node: NodeWithId,
   parsedRules: ParsedCSSRulesObjValue,
 ) {
@@ -304,4 +309,175 @@ export function getInlineText(
     });
   }
   return style;
+}
+
+function setIdAttrs(node): NodeWithId {
+  let id = `node-${node.nodeId}`;
+  let hasId = false;
+  /*
+  if (!node.attributes) {
+    const { attributes } = await DOM.getAttributes({
+      nodeId: node.nodeId,
+    });
+    node.attributes = attributes;
+  }
+  */
+  for (let i = 0; i < node.attributes.length; i += 2) {
+    if (node.attributes[i] === "id") {
+      id = node.attributes[i + 1];
+      if (id.includes(":")) {
+        // can break selector
+        id = id.replace(/:/g, "-");
+        node.attributes[i + 1] = id;
+      }
+      hasId = true;
+      break;
+    }
+  }
+  if (!hasId) {
+    node.attributes.push("id", id);
+  }
+  node.id = id;
+  return node;
+}
+
+function mergeTrees(roots: NodeWithId[], nScreens: number): NodeWithId {
+  const mergedRoot = roots[0];
+  // merge css, filling missing with display: none
+  if (mergedRoot.nodeType === CDPNodeType.ELEMENT_NODE) {
+    for (const root of roots.slice(1)) {
+      for (let i = 0; i < nScreens; ++i) {
+        if (root.css[i]) {
+          mergedRoot.css[i] = root.css[i];
+        }
+      }
+    }
+    for (let i = 0; i < nScreens; ++i) {
+      if (!mergedRoot.css[i]) {
+        mergedRoot.css[i] = {
+          inherited: [],
+          attributes: [],
+          matched: {},
+          pseudoElementMatched: {},
+          inline: [
+            {
+              name: "display",
+              value: "none",
+              important: false,
+            },
+          ],
+        };
+      }
+    }
+  }
+
+  if (roots.length === 1) {
+    // assume children inherits the display: none
+    // can break if children have some CSS overriding
+    return mergedRoot;
+  }
+
+  const nodeMap = new Map<number, NodeWithId[]>();
+
+  for (const root of roots) {
+    if (root.children) {
+      for (const child of root.children) {
+        if (!nodeMap.has(child.nodeId)) {
+          nodeMap.set(child.nodeId, [child]);
+        } else {
+          nodeMap.get(child.nodeId).push(child);
+        }
+      }
+    }
+  }
+
+  mergedRoot.children = [];
+  for (const nodes of nodeMap.values()) {
+    mergedRoot.children.push(mergeTrees(nodes, nScreens));
+  }
+  return mergedRoot;
+}
+
+export type InlineOptions = {
+  highlightNode?: boolean;
+  customScreens?: Screen[];
+  mediaConditions?: string[];
+};
+
+export async function getInlinedComponent(
+  selector: string,
+  inspector: Inspector,
+  onError: (e: any) => void = () => {},
+  options: InlineOptions,
+): Promise<Document> {
+  const { highlightNode = false } = options;
+  let { customScreens, mediaConditions } = options;
+  if (!customScreens) {
+    customScreens = [undefined];
+    mediaConditions = [""];
+  } else if (mediaConditions.length !== customScreens.length) {
+    throw Error(
+      `mediaConditions.length should equal to customScreens.length. Got: ${mediaConditions.length} vs ${customScreens.length}`,
+    );
+  }
+
+  const roots = [];
+  for (let i = 0; i < customScreens.length; ++i) {
+    const node = await inspector.inspect(selector, {
+      depth: -1,
+      parseOptions: { excludeOrigin: ["user-agent"], removeUnusedVar: true },
+      customScreen: customScreens[i],
+      beforeGetMatchedStyle: async (node, inspector) => {
+        if (highlightNode) {
+          const objectId = await inspector.getNodeObjectId(node);
+          await inspector.scrollToNode(objectId);
+          await inspector.highlightNode(objectId);
+        }
+        // force all pseudo classes
+        await inspector.sendCommand("CSS.forcePseudoState", {
+          nodeId: node.nodeId,
+          forcedPseudoClasses: forciblePseudoClasses,
+        });
+      },
+      afterGetMatchedStyle: async (node, inspector) => {
+        // cleanup forced pseudo classes
+        await inspector.sendCommand("CSS.forcePseudoState", {
+          nodeId: node.nodeId,
+          forcedPseudoClasses: [],
+        });
+        //console.log("cleaned forced pseudo classes for node", node.nodeId);
+        if (highlightNode) {
+          await inspector.hideHighlight();
+        }
+      },
+    });
+    // label css by screen idx
+    await traverse(
+      node,
+      (n) => {
+        const css = [];
+        css[i] = n.css;
+        n.css = css;
+      },
+      onError,
+      -1,
+      true,
+    );
+    roots.push(node);
+  }
+  const root = mergeTrees(roots, customScreens.length);
+  await traverse(
+    root,
+    (node) => {
+      setIdAttrs(node);
+      const styleText = getInlineText(node, node.css, mediaConditions);
+      node.attributes.push("data-css", styleText);
+    },
+    onError,
+    -1,
+    true,
+  );
+  const doc = Inspector.nodeToDOM(root);
+  inlineStyle(doc);
+  return doc;
 }

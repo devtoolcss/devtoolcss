@@ -4,3 +4,4 @@ export * from "./inliner.js";
 export * from "./traverse.js";
 export * from "./constants.js";
 export * from "./inlineStyle.js";
+export * from "./Inspector.js";

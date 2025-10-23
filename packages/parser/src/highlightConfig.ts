@@ -1,11 +1,5 @@
-import type {
-  Node,
-  DOMApi,
-  OverlayApi,
-  RuntimeApi,
-  HighlightConfig,
-} from "./types.js";
-const highlightConfig: HighlightConfig = {
+import { Protocol } from "devtools-protocol";
+export const highlightConfig: Protocol.Overlay.HighlightConfig = {
   showInfo: true,
   showRulers: false,
   showStyles: false,
@@ -200,25 +194,3 @@ const highlightConfig: HighlightConfig = {
     a: 0.6,
   },
 };
-
-export async function highlightNode(
-  node: Node,
-  DOM: DOMApi,
-  Runtime: RuntimeApi,
-  Overlay: OverlayApi,
-  config: { showOverlay?: boolean } = { showOverlay: true },
-): Promise<void> {
-  const { showOverlay } = config;
-  const { object } = await DOM.resolveNode({ nodeId: node.nodeId });
-  const objectId = object.objectId;
-  if (objectId) {
-    await Runtime.callFunctionOn({
-      arguments: [],
-      functionDeclaration:
-        "function(){this.scrollIntoView({behavior: 'instant', block: 'center'});}",
-      objectId,
-      silent: true,
-    });
-    if (showOverlay) await Overlay.highlightNode({ highlightConfig, objectId });
-  }
-}

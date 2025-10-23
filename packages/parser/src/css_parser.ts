@@ -10,6 +10,11 @@ import type {
 
 import { inheritableProperties } from "./constants.js";
 
+export type ParseOptions = {
+  excludeOrigin?: string[];
+  removeUnusedVar?: boolean;
+};
+
 function isInheritableProperty(propName: string): boolean {
   return propName.startsWith("--") || inheritableProperties.includes(propName);
 }
@@ -134,7 +139,7 @@ export function iterateParsedCSS(
 
 export function parseGetMatchedStylesForNodeResponse(
   response: GetMatchedStylesForNodeResponse,
-  options: { excludeOrigin?: string[]; removeUnusedVar?: boolean } = {},
+  options: ParseOptions = {},
 ) {
   const {
     inherited,

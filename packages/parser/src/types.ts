@@ -30,6 +30,7 @@ export type ParsedCSSRules = {
 
 export type NodeWithId = Omit<Protocol.DOM.Node, "children"> & {
   id?: string;
+  css?: any; //ParsedCSS | ParsedCSS[];
   children?: NodeWithId[];
   //computedStyle?: Protocol.CSS.CSSComputedStyleProperty[];
 };
@@ -40,4 +41,11 @@ export type ParsedCSS = {
   matched: ParsedCSSRules;
   pseudoElementMatched: { [pseudoType: string]: ParsedCSSRules };
   inline: ParsedCSSPropertyValue[];
+};
+
+export type Screen = {
+  width: number;
+  height: number;
+  deviceScaleFactor: number;
+  mobile: boolean;
 };

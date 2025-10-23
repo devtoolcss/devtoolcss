@@ -3,9 +3,7 @@ export function inlineStyle(
   cssAttr = "data-css",
   removeAttr = true,
 ) {
-  const body = document.querySelector("body");
-  const elements = Array.from(body.querySelectorAll("*"));
-  elements.push(body);
+  const elements = document.querySelectorAll(`[${cssAttr}]`);
   for (const el of elements) {
     const cssText = el.getAttribute(cssAttr);
     if (cssText) {
