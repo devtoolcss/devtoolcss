@@ -25,7 +25,7 @@ export type ParseOptions = {
 
 export function parseCSSProperties(
   cssStyle: CSSStyle,
-  appliedProperties: ParsedCSSPropertyObject,
+  appliedProperties: ParsedCSSPropertyObject = {}, // optional for tracking applied
   inherited: boolean = false,
 ): ParsedCSSPropertyValue[] {
   const css: ParsedCSSPropertyValue[] = [];
