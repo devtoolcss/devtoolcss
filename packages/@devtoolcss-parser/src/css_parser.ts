@@ -15,6 +15,8 @@ import type {
 
 import inheritableProperties from "./inheritableProperties.js";
 
+import { shorthandMap } from "./shorthands.js";
+
 function isInheritableProperty(propName: string): boolean {
   return propName.startsWith("--") || inheritableProperties.includes(propName);
 }
@@ -24,11 +26,56 @@ export type ParseOptions = {
   removeUnusedVar?: boolean;
 };
 
+function addShortHands(
+  cssStyle: CSSStyle,
+  css: ParsedCSSPropertyValue[],
+  inherited: boolean,
+) {
+  for (const { name, value, important } of cssStyle.shorthandEntries) {
+    if (shorthandMap[name] === undefined) continue;
+
+    for (let i = 0; i < css.length; i++) {
+      if (shorthandMap[name].includes(css[i].name)) {
+        const n = shorthandMap[name].length;
+        const allExplicit = css.slice(i, i + n).every((p) => p.explicit);
+        if (!allExplicit) continue; // already marked to implicit
+        const names = css
+          .slice(i, i + n)
+          .map((p) => p.name)
+          .sort();
+        // array equality check
+        if (
+          JSON.stringify(names) ===
+          JSON.stringify(shorthandMap[name].slice().sort())
+        ) {
+          for (let j = i; j < i + n; j++) {
+            css[j].explicit = false;
+          }
+          // add shorthand entry
+          css.splice(i, 0, {
+            name,
+            value: value.replace(/\s*!important\s*$/, ""),
+            important: Boolean(important),
+            inherited: inherited,
+            explicit: true,
+          });
+          i += n; // skip longhands, later i++ will skip shorthand
+        }
+      }
+    }
+  }
+}
+
 export function parseCSSProperties(
   cssStyle: CSSStyle,
   appliedProperties: ParsedCSSPropertyObject = {}, // optional for tracking applied
   inherited: boolean = false,
 ): ParsedCSSPropertyValue[] {
+  // For user-agent or injected styles (no .styleSheetId), we cannot determine explicit
+  // or not by fields because they always only have "name" and "value" fields. Worse,
+  // their properties only contain longhands, and shorthands are in .shorthandEntries
+  // Devtool workaround this by heuristically grouping longhands to shorthands
+  // https://github.com/ChromeDevTools/devtools-frontend/blob/d5701ce7eb7f0dcdeafdf322762a4afcf13cafaf/front_end/core/sdk/CSSStyleDeclaration.ts#L128
   const css: ParsedCSSPropertyValue[] = [];
   for (const prop of cssStyle.cssProperties) {
     if (prop.disabled || prop.parsedOk === false) {
@@ -48,8 +95,10 @@ export function parseCSSProperties(
     // Current behavior will return all long-hands in CSSProperty, so we don't build lookup table,
     // but directly check whether it is in declared in cssText
 
-    // explicit is having more than "name" and "value" fields
-    const explicit = Object.keys(prop).length > 2;
+    // explicit is having more than "name" and "value" fields, if styleSheetId exist
+    const explicit = cssStyle.styleSheetId
+      ? Object.keys(prop).length > 2
+      : true;
 
     //const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
     // failed when
@@ -58,7 +107,7 @@ export function parseCSSProperties(
     // {"name": "font-family", "value": "system-ui, sans-serif"}
 
     const isDup =
-      !prop.range && css.some((p) => p.name === prop.name && p.value === value);
+      !explicit && css.some((p) => p.name === prop.name && p.value === value);
 
     if (isDup) continue;
 
@@ -88,6 +137,11 @@ export function parseCSSProperties(
       appliedProperties[prop.name] = valueObj; // same obj for final checking applied
     }
   }
+
+  if (!cssStyle.styleSheetId) {
+    addShortHands(cssStyle, css, inherited);
+  }
+
   return css;
 }
 
