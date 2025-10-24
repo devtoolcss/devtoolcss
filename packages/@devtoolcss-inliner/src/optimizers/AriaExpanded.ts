@@ -1,8 +1,7 @@
 import type { Inspector, Node } from "@devtoolcss/inspector";
-import type { ParsedCSSRules } from "@devtoolcss/parser";
 import type { Optimizer } from "./optimizer.js";
 import { parseCSSProperties } from "@devtoolcss/parser";
-import type { NodeWithId } from "../types.js";
+import type { ParsedCSSRules, NodeWithId } from "../types.js";
 
 /**
  handling li:has([aria-expanded]) nodes.

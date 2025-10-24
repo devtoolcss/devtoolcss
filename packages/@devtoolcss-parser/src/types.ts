@@ -12,16 +12,18 @@ export type ParsedCSSPropertyObject = {
 };
 
 // Array to allow repetitive properties for checking which one is applied
-// TODO: allow selector repetition with array
-// TODO: add stylesheet source
-export type ParsedCSSRules = {
-  [selector: string]: ParsedCSSPropertyValue[];
+export type ParsedCSSRule = {
+  allSelectors: string[];
+  matchedSelectors: string[];
+  properties: ParsedCSSPropertyValue[];
+  origin: string;
+  cssText?: string;
 };
 
 export type ParsedCSS = {
-  inherited: ParsedCSSRules[]; // selector "::inline", "::attributes" are special cases
+  inherited: { inline: ParsedCSSPropertyValue[]; matched: ParsedCSSRule[] }[];
   attributes: ParsedCSSPropertyValue[];
-  matched: ParsedCSSRules;
-  pseudoElementMatched: { [pseudoType: string]: ParsedCSSRules };
+  matched: ParsedCSSRule[];
+  pseudoElements: ParsedCSSRule[];
   inline: ParsedCSSPropertyValue[];
 };

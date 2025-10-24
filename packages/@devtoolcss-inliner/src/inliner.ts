@@ -4,7 +4,6 @@ import * as CSSwhat from "css-what";
 import type {
   ParsedCSS,
   ParsedCSSPropertyObject,
-  ParsedCSSRules,
   ParsedCSSPropertyValue,
 } from "@devtoolcss/parser";
 import { Inspector, CDPNodeType } from "@devtoolcss/inspector";
@@ -20,6 +19,7 @@ import type {
   NodeWithId,
   ParsedCSSRulesObjValue,
   ParsedStyleSheetObjValue,
+  ParsedCSSRules,
   InlineOptions,
 } from "./types.js";
 import {
@@ -31,14 +31,14 @@ import type { Optimizer } from "./optimizers/optimizer.js";
 
 function getRewrittenSelectors(
   idSelector: string,
-  selectorList?: string,
+  matchedSelectors: string[] | undefined,
 ): string[] {
   const rewrittenSelectors = new Set<string>();
-  if (!selectorList) {
+  if (!matchedSelectors) {
     rewrittenSelectors.add(idSelector);
   } else {
-    const parsedSelectors = CSSwhat.parse(selectorList);
-    for (const parsedSelector of parsedSelectors) {
+    for (const matchedSelector of matchedSelectors) {
+      const parsedSelector = CSSwhat.parse(matchedSelector)[0];
       const suffix = getNormalizedSuffix(parsedSelector);
       if (!suffix && hasNonFuncPseudoClass(parsedSelector)) {
         // TODO: probably pseudo class in functional selector
@@ -116,16 +116,17 @@ function cascade(rules: ParsedCSSRules): ParsedCSSRulesObjValue {
 
 function rewriteSelectors(parsed: ParsedCSS, id: string): ParsedCSSRules {
   const rules: ParsedCSSRules = {};
-  iterateParsedCSS(parsed, (values, selectorList, context) => {
+  iterateParsedCSS(parsed, (values, matchedSelectors, context) => {
     const idSelector = `#${id}`;
-    const rewrittenSelectors = getRewrittenSelectors(idSelector, selectorList);
+    const rewrittenSelectors = getRewrittenSelectors(
+      idSelector,
+      matchedSelectors,
+    );
     for (const rewrittenSelector of rewrittenSelectors) {
       if (!rules[rewrittenSelector]) rules[rewrittenSelector] = [];
       values.forEach((v) => {
-        if (
-          context !== "inherited" ||
-          (context === "inherited" && v.name.startsWith("--"))
-        ) {
+        // exclude inherited non-variable properties
+        if (v.name.startsWith("--") || context !== "inherited") {
           rules[rewrittenSelector].push(v);
         }
       });

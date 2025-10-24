@@ -1,6 +1,5 @@
 import type { Inspector, Node } from "@devtoolcss/inspector";
-import type { ParsedCSSRules } from "@devtoolcss/parser";
-import type { NodeWithId } from "../types.js";
+import type { ParsedCSSRules, NodeWithId } from "../types.js";
 
 /**
  * Optimizer interface for CSS optimizations.

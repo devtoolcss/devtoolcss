@@ -1,3 +1,4 @@
+// use a version of devtools-protocol types for developer convenience
 import type { Protocol } from "devtools-protocol";
 
 type RuleMatch = Protocol.CSS.RuleMatch;
@@ -6,7 +7,7 @@ type GetMatchedStylesForNodeResponse =
   Protocol.CSS.GetMatchedStylesForNodeResponse;
 
 import type {
-  ParsedCSSRules,
+  ParsedCSSRule,
   ParsedCSSPropertyValue,
   ParsedCSS,
   ParsedCSSPropertyObject,
@@ -48,7 +49,6 @@ export function parseCSSProperties(
     // but directly check whether it is in declared in cssText
 
     // explicit is having more than "name" and "value" fields
-    console.log(prop, Object.keys(prop));
     const explicit = Object.keys(prop).length > 2;
 
     //const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
@@ -96,11 +96,14 @@ function iterateRuleMatches(
   appliedProperties: ParsedCSSPropertyObject,
   excludeOrigin: string[] | undefined = undefined,
   inherited: boolean,
-): ParsedCSSRules {
-  const parsedRules: ParsedCSSRules = {};
+): ParsedCSSRule[] {
+  const parsedRules: ParsedCSSRule[] = [];
   for (const ruleMatch of ruleMatches) {
     if (excludeOrigin?.includes(ruleMatch.rule.origin)) continue;
-    const matchingSelectors = ruleMatch.matchingSelectors.map(
+    const allSelectors = ruleMatch.rule.selectorList.selectors.map(
+      (s) => s.text,
+    );
+    const matchedSelectors = ruleMatch.matchingSelectors.map(
       (i) => ruleMatch.rule.selectorList.selectors[i].text,
     );
     const properties = parseCSSProperties(
@@ -108,20 +111,25 @@ function iterateRuleMatches(
       appliedProperties,
       inherited,
     );
-    const selectorList = matchingSelectors.join(", ");
-    // merge if same selectorList
-    if (!parsedRules[selectorList]) parsedRules[selectorList] = properties;
-    else parsedRules[selectorList].push(...properties);
+    parsedRules.push({
+      allSelectors,
+      matchedSelectors,
+      properties,
+      origin: ruleMatch.rule.origin,
+      cssText: ruleMatch.rule.style.cssText,
+    });
   }
   return parsedRules;
 }
 
+// Iterate all properties in ParsedCSS.
+// Preserve property defined order, not considering important
 export function iterateParsedCSS(
   parsed: ParsedCSS,
   callback: (
-    values: ParsedCSSPropertyValue[],
-    selectorList?: string, // can have multiple selectors separated by commas
-    context?:
+    properties: ParsedCSSPropertyValue[],
+    matchedSelectors: string[] | undefined,
+    context:
       | "inherited"
       | "attributes"
       | "matched"
@@ -129,22 +137,21 @@ export function iterateParsedCSS(
       | "inline",
   ) => void,
 ) {
-  for (const inheritedRules of parsed.inherited) {
-    for (const [selector, rules] of Object.entries(inheritedRules)) {
-      callback(rules, selector, "inherited");
+  for (const { inline, matched } of parsed.inherited) {
+    callback(inline, undefined, "inherited");
+    for (const rule of matched) {
+      callback(rule.properties, rule.matchedSelectors, "inherited");
     }
   }
 
   callback(parsed.attributes, undefined, "attributes");
 
-  for (const [selector, rules] of Object.entries(parsed.matched)) {
-    callback(rules, selector, "matched");
+  for (const rule of parsed.matched) {
+    callback(rule.properties, rule.matchedSelectors, "matched");
   }
 
-  for (const pseudoRules of Object.values(parsed.pseudoElementMatched)) {
-    for (const [selector, rules] of Object.entries(pseudoRules)) {
-      callback(rules, selector, "pseudoElementMatched");
-    }
+  for (const rule of parsed.pseudoElements) {
+    callback(rule.properties, rule.matchedSelectors, "matched");
   }
 
   callback(parsed.inline, undefined, "inline");
@@ -165,8 +172,8 @@ export function parseGetMatchedStylesForNodeResponse(
   const parsed: ParsedCSS = {
     inherited: [],
     attributes: [],
-    matched: {},
-    pseudoElementMatched: {},
+    matched: [],
+    pseudoElements: [],
     inline: [],
   };
   const appliedProperties: ParsedCSSPropertyObject = {};
@@ -174,9 +181,12 @@ export function parseGetMatchedStylesForNodeResponse(
   if (inherited) {
     for (let i = inherited.length - 1; i >= 0; i--) {
       const inheritedStyle = inherited[i];
-      const data = {};
+      const data: ParsedCSS["inherited"][number] = {
+        inline: [],
+        matched: [],
+      };
       if (inheritedStyle.inlineStyle) {
-        data["::inline"] = parseCSSProperties(
+        data.inline = parseCSSProperties(
           inheritedStyle.inlineStyle,
           appliedProperties,
           true,
@@ -189,12 +199,10 @@ export function parseGetMatchedStylesForNodeResponse(
           options.excludeOrigin,
           true,
         );
-        Object.assign(data, parsedRules);
+        data.matched = parsedRules;
       }
       parsed.inherited.push(data);
     }
-    // closest first
-    parsed.inherited.reverse();
   }
 
   if (attributesStyle) {
@@ -219,7 +227,7 @@ export function parseGetMatchedStylesForNodeResponse(
         options.excludeOrigin,
         false,
       );
-      parsed.pseudoElementMatched[match.pseudoType] = parsedRules;
+      parsed.pseudoElements[match.pseudoType] = parsedRules;
     }
   }
 
