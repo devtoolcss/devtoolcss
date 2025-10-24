@@ -75,10 +75,9 @@ export function parseCSSProperties(
       a: ParsedCSSPropertyValue,
       b: ParsedCSSPropertyValue,
     ): boolean => {
-      // inherited properties can always be overridden without considering importance
-      if (a.inherited) return true;
+      if (a.inherited && !b.inherited) return true;
 
-      // important has higher priority
+      // important has higher priority, also in inherited
       return !(a.important && !b.important);
     };
 
