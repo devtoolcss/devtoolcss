@@ -1,5 +1,28 @@
-import type { ParseOptions } from "@devtoolcss/parser";
+import type { ParseOptions, ParsedCSS } from "@devtoolcss/parser";
 import type { Inspector } from "./Inspector.js";
+
+// version independent types for CDP data
+export type GetMatchedStylesForNodeResponse = {
+  inlineStyle?: any;
+  attributesStyle?: any;
+  matchedCSSRules?: any[];
+  pseudoElements?: any[];
+  inherited?: any[];
+  inheritedPseudoElements?: any[];
+  cssKeyframesRules?: any[];
+  cssPositionTryRules?: any[];
+  activePositionFallbackIndex?: number;
+  cssPropertyRules?: any[];
+  cssPropertyRegistrations?: any[];
+  cssFontPaletteValuesRule?: any;
+  parentLayoutNodeId?: number;
+  cssFunctionRules?: any[];
+};
+
+export type CSSComputedStyleProperty = {
+  name: string;
+  value: string;
+};
 
 export type Node = {
   nodeId: number;
@@ -7,6 +30,8 @@ export type Node = {
   localName: string;
   attributes?: string[];
   children?: Node[];
+  styles?: ParsedCSS | GetMatchedStylesForNodeResponse;
+  computed?: CSSComputedStyleProperty[];
   [key: string]: any; // Allow any other properties
 };
 
@@ -14,11 +39,6 @@ export type CDPClient = {
   send: (method: string, params?: object) => Promise<any>;
   on: (event: string, callback: (data: any) => void) => void;
   off: (event: string, callback: (data: any) => void) => void;
-};
-
-export type Progress = {
-  completed: number;
-  total: number;
 };
 
 export type Screen = {
@@ -31,6 +51,7 @@ export type Screen = {
 export type InspectOptions = {
   depth?: number;
   raw?: boolean;
+  computed?: boolean;
   parseOptions?: ParseOptions;
   customScreen?: Screen;
   beforeTraverse?: (

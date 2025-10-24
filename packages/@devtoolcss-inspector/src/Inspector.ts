@@ -4,7 +4,7 @@ import {
 } from "@devtoolcss/parser";
 import { CDPNodeType } from "./constants.js";
 import EventEmitter from "./EventEmitter.js";
-import { Node, CDPClient, Progress, InspectOptions } from "./types.js";
+import { Node, CDPClient, InspectOptions } from "./types.js";
 import highlightConfig from "./highlightConfig.js";
 
 let JSDOM: any = null;
@@ -66,7 +66,7 @@ export class Inspector extends EventEmitter {
     await childrenPromise;
   }
 
-  private emitProgress(p: Progress) {
+  private emitProgress(p: { completed: number; total: number }) {
     this.emit("progress", p);
   }
 
@@ -343,6 +343,7 @@ export class Inspector extends EventEmitter {
     const {
       depth = -1,
       raw = false,
+      computed = false,
       parseOptions = {},
       customScreen,
       beforeTraverse,
@@ -410,13 +411,21 @@ export class Inspector extends EventEmitter {
         await afterGetMatchedStyle?.(node, this, el);
 
         if (raw) {
-          node.css = styles;
+          node.styles = styles;
         } else {
           const parsedResponse = parseGetMatchedStylesForNodeResponse(
             styles,
             parseOptions,
           );
-          node.css = parsedResponse;
+          node.styles = parsedResponse;
+        }
+
+        if (computed) {
+          const { computedStyle } = await this.sendCommand(
+            "CSS.getComputedStyleForNode",
+            { nodeId: node.nodeId },
+          );
+          node.computed = computedStyle;
         }
 
         ++completed;

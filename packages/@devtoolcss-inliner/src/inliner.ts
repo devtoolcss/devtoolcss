@@ -445,9 +445,8 @@ async function getInlinedComponent(
     await traverse(
       node,
       (n) => {
-        const css = [];
-        css[i] = n.css;
-        n.css = css;
+        n.css = [];
+        n.css[i] = n.styles;
       },
       onError,
       -1,
@@ -486,4 +485,4 @@ async function getInlinedComponent(
   return doc;
 }
 
-export { InlineOptions, getInlinedComponent };
+export { getInlinedComponent };
