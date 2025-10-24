@@ -425,7 +425,16 @@ export class Inspector extends EventEmitter {
             "CSS.getComputedStyleForNode",
             { nodeId: node.nodeId },
           );
-          node.computed = computedStyle;
+          node.computed = computedStyle.reduce(
+            (
+              obj: Record<string, string>,
+              item: { name: string; value: string },
+            ) => {
+              obj[item.name] = item.value;
+              return obj;
+            },
+            {},
+          );
         }
 
         ++completed;

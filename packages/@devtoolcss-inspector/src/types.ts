@@ -19,11 +19,6 @@ export type GetMatchedStylesForNodeResponse = {
   cssFunctionRules?: any[];
 };
 
-export type CSSComputedStyleProperty = {
-  name: string;
-  value: string;
-};
-
 export type Node = {
   nodeId: number;
   nodeType: number;
@@ -31,7 +26,7 @@ export type Node = {
   attributes?: string[];
   children?: Node[];
   styles?: ParsedCSS | GetMatchedStylesForNodeResponse;
-  computed?: CSSComputedStyleProperty[];
+  computed?: object;
   [key: string]: any; // Allow any other properties
 };
 
