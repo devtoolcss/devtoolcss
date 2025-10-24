@@ -389,6 +389,7 @@ async function getInlinedComponent(
   for (let i = 0; i < customScreens.length; ++i) {
     const node = await inspector.inspect(selector, {
       depth: -1,
+      computed: false,
       parseOptions: { excludeOrigin: ["user-agent"], removeUnusedVar: true },
       customScreen: customScreens[i],
       beforeTraverse: async (rootNode, inspector, rootElement) => {

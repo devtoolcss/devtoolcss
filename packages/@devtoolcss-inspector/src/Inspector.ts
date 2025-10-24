@@ -341,9 +341,9 @@ export class Inspector extends EventEmitter {
 
   async inspect(selector: string, options: InspectOptions = {}): Promise<Node> {
     const {
-      depth = -1,
+      depth = 0,
       raw = false,
-      computed = false,
+      computed = true,
       parseOptions = {},
       customScreen,
       beforeTraverse,
