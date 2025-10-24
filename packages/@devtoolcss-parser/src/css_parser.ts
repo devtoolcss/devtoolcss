@@ -38,7 +38,6 @@ export function parseCSSProperties(
       // not inheritable property, skip
       continue;
     }
-    //prop.explicit = Boolean(prop.range); // have false negative
     const value = prop.value.replace(/\s*!important\s*$/, "");
 
     // .longhandProperties not exist if first arg is var
@@ -48,7 +47,21 @@ export function parseCSSProperties(
     // Current behavior will return all long-hands in CSSProperty, so we don't build lookup table,
     // but directly check whether it is in declared in cssText
 
-    const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
+    // explicit is having more than "name" and "value" fields
+    console.log(prop, Object.keys(prop));
+    const explicit = Object.keys(prop).length > 2;
+
+    //const explicit = new RegExp(`(^|[^-])${prop.name}`).test(cssStyle.cssText);
+    // failed when
+    // {"name": "font-family", "value": "system-ui,sans-serif", "range": {}, ...}
+    // ...
+    // {"name": "font-family", "value": "system-ui, sans-serif"}
+
+    const isDup =
+      !prop.range && css.some((p) => p.name === prop.name && p.value === value);
+
+    if (isDup) continue;
+
     const valueObj: ParsedCSSPropertyValue = {
       name: prop.name,
       value: value,
@@ -64,12 +77,9 @@ export function parseCSSProperties(
     ): boolean => {
       // inherited properties can always be overridden without considering importance
       if (a.inherited) return true;
-      return (
-        // important has higher priority
-        !(a.important && !b.important) &&
-        // handle followed dup (bug?) without range (implicit)
-        !(a.value === b.value && !explicit)
-      );
+
+      // important has higher priority
+      return !(a.important && !b.important);
     };
 
     if (
