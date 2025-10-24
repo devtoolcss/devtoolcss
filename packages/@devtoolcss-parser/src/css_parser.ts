@@ -233,19 +233,14 @@ export function parseGetMatchedStylesForNodeResponse(
   const appliedProperties: ParsedCSSPropertyObject = {};
 
   if (inherited) {
+    // reverse order to have closest ancestor last
     for (let i = inherited.length - 1; i >= 0; i--) {
       const inheritedStyle = inherited[i];
       const data: ParsedCSS["inherited"][number] = {
+        distance: i,
         inline: [],
         matched: [],
       };
-      if (inheritedStyle.inlineStyle) {
-        data.inline = parseCSSProperties(
-          inheritedStyle.inlineStyle,
-          appliedProperties,
-          true,
-        );
-      }
       if (inheritedStyle.matchedCSSRules) {
         const parsedRules = iterateRuleMatches(
           inheritedStyle.matchedCSSRules,
@@ -253,7 +248,22 @@ export function parseGetMatchedStylesForNodeResponse(
           options.excludeOrigin,
           true,
         );
+        for (let j = parsedRules.length - 1; j >= 0; j--) {
+          if (parsedRules[j].properties.length === 0) {
+            parsedRules.splice(j, 1);
+          }
+        }
         data.matched = parsedRules;
+      }
+      if (inheritedStyle.inlineStyle) {
+        data.inline = parseCSSProperties(
+          inheritedStyle.inlineStyle,
+          appliedProperties,
+          true,
+        );
+      }
+      if (data.inline.length === 0 && data.matched.length === 0) {
+        continue;
       }
       parsed.inherited.push(data);
     }

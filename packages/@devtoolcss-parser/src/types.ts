@@ -21,7 +21,11 @@ export type ParsedCSSRule = {
 };
 
 export type ParsedCSS = {
-  inherited: { inline: ParsedCSSPropertyValue[]; matched: ParsedCSSRule[] }[];
+  inherited: {
+    distance: number;
+    inline: ParsedCSSPropertyValue[];
+    matched: ParsedCSSRule[];
+  }[];
   attributes: ParsedCSSPropertyValue[];
   matched: ParsedCSSRule[];
   pseudoElements: ParsedCSSRule[];
