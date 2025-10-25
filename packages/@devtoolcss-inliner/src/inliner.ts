@@ -369,7 +369,7 @@ async function getInlinedComponent(
   selector: string,
   inspector: Inspector,
   onError: (e: any) => void = () => {},
-  options: InlineOptions,
+  options: InlineOptions = {},
 ): Promise<Document> {
   const { highlightNode = false } = options;
   let { customScreens, mediaConditions } = options;
