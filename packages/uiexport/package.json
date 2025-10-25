@@ -17,7 +17,7 @@
     "js-beautify": "^1.15.4"
   },
   "scripts": {
-    "build": "bash scripts/copy.sh && node scripts/esbuild.config.js",
+    "build": "node scripts/copy.js && node scripts/esbuild.config.js",
     "prepare": "pnpm build",
     "watch": "node scripts/watch.js",
     "sync:manifest": "node scripts/sync-manifest.js"

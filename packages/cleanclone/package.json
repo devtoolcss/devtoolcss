@@ -48,8 +48,8 @@
     "devtools-protocol": "0.0.927104"
   },
   "scripts": {
-    "build": "tsc",
-    "prepare": "pnpm build && chmod +x ./dist/cli.js",
+    "build": "tsc && node scripts/chmod.js ./dist/cli.js 755",
+    "prepare": "pnpm build",
     "type-check": "tsc --noEmit"
   },
   "bin": {
