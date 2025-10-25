@@ -237,7 +237,7 @@ export function parseGetMatchedStylesForNodeResponse(
     for (let i = inherited.length - 1; i >= 0; i--) {
       const inheritedStyle = inherited[i];
       const data: ParsedCSS["inherited"][number] = {
-        distance: i,
+        distance: i + 1,
         inline: [],
         matched: [],
       };
