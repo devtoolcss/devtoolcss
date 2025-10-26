@@ -11,6 +11,7 @@ import type {
   ParsedCSSPropertyValue,
   ParsedCSS,
   ParsedCSSPropertyObject,
+  ParseOptions,
 } from "./types.js";
 
 import inheritableProperties from "./inheritableProperties.js";
@@ -20,11 +21,6 @@ import { shorthandMap } from "./shorthands.js";
 function isInheritableProperty(propName: string): boolean {
   return propName.startsWith("--") || inheritableProperties.includes(propName);
 }
-
-export type ParseOptions = {
-  excludeOrigin?: string[];
-  removeUnusedVar?: boolean;
-};
 
 function addShortHands(
   cssStyle: CSSStyle,
@@ -148,12 +144,10 @@ export function parseCSSProperties(
 function iterateRuleMatches(
   ruleMatches: RuleMatch[],
   appliedProperties: ParsedCSSPropertyObject,
-  excludeOrigin: string[] | undefined = undefined,
   inherited: boolean,
 ): ParsedCSSRule[] {
   const parsedRules: ParsedCSSRule[] = [];
   for (const ruleMatch of ruleMatches) {
-    if (excludeOrigin?.includes(ruleMatch.rule.origin)) continue;
     const allSelectors = ruleMatch.rule.selectorList.selectors.map(
       (s) => s.text,
     );
@@ -245,7 +239,6 @@ export function parseGetMatchedStylesForNodeResponse(
         const parsedRules = iterateRuleMatches(
           inheritedStyle.matchedCSSRules,
           appliedProperties,
-          options.excludeOrigin,
           true,
         );
         for (let j = parsedRules.length - 1; j >= 0; j--) {
@@ -277,7 +270,6 @@ export function parseGetMatchedStylesForNodeResponse(
     const parsedRules = iterateRuleMatches(
       matchedCSSRules,
       appliedProperties,
-      options.excludeOrigin,
       false,
     );
     parsed.matched = parsedRules;
@@ -288,7 +280,6 @@ export function parseGetMatchedStylesForNodeResponse(
       const parsedRules = iterateRuleMatches(
         match.matches,
         appliedProperties,
-        options.excludeOrigin,
         false,
       );
       parsed.pseudoElements[match.pseudoType] = parsedRules;
@@ -329,7 +320,7 @@ export function parseGetMatchedStylesForNodeResponse(
   return parsed;
 }
 
-function removeUnusedVariables(parsed: ParsedCSS) {
+export function removeUnusedVariables(parsed: ParsedCSS) {
   const removedVariables: Set<string> = new Set();
   const varUses = new Map<string, number>();
   iterateParsedCSS(parsed, (values) => {

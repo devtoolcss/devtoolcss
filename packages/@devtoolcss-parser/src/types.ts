@@ -31,3 +31,7 @@ export type ParsedCSS = {
   pseudoElements: ParsedCSSRule[];
   inline: ParsedCSSPropertyValue[];
 };
+
+export type ParseOptions = {
+  removeUnusedVar?: boolean;
+};
