@@ -19,12 +19,15 @@ export type GetMatchedStylesForNodeResponse = {
   cssFunctionRules?: any[];
 };
 
-export type Node = {
+export type CDPNode = {
   nodeId: number;
   nodeType: number;
   localName: string;
   attributes?: string[];
-  children?: Node[];
+  childNodeCount?: number;
+  children?: CDPNode[];
+
+  // custom added properties
   styles?: ParsedCSS | GetMatchedStylesForNodeResponse;
   computed?: object;
   [key: string]: any; // Allow any other properties
@@ -36,7 +39,7 @@ export type CDPClient = {
   off: (event: string, callback: (data: any) => void) => void;
 };
 
-export type Screen = {
+export type ScreenSetting = {
   width: number;
   height: number;
   deviceScaleFactor: number;
@@ -44,24 +47,21 @@ export type Screen = {
 };
 
 export type InspectOptions = {
-  depth?: number;
+  exclude?: {
+    computed?: boolean;
+    styles?: boolean;
+  };
   raw?: boolean;
-  computed?: boolean;
   parseOptions?: ParseOptions;
-  customScreen?: Screen;
-  beforeTraverse?: (
-    rootNode: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ) => Promise<void>;
-  beforeGetMatchedStyle?: (
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ) => Promise<void>;
-  afterGetMatchedStyle?: (
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ) => Promise<void>;
 };
+
+export type ParsedInspectResult = {
+  styles?: ParsedCSS;
+  computed?: object;
+};
+export type RawInspectResult = {
+  styles?: GetMatchedStylesForNodeResponse;
+  computed?: { name: string; value: string }[];
+};
+
+export type InspectResult = ParsedInspectResult | RawInspectResult;
