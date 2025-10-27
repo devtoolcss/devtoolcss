@@ -31,7 +31,7 @@ function findNodeIdx(nodes: CDPNode[], nodeId: number): number {
 // we need EventEmitter for warning events, which can happen
 // anytime event fired
 export class Inspector extends EventEmitter {
-  private documentImpl: Document;
+  // fixed document object reference
   readonly document: Document;
 
   private idToNodes = new Map<number, { cdpNode: CDPNode; docNode: Node }>();
@@ -86,7 +86,7 @@ export class Inspector extends EventEmitter {
   ) {
     super();
     // source document for calling .implementation.createHTMLDocument()
-    this.documentImpl = document;
+    this.document = document.implementation.createHTMLDocument();
     this.sendCommand = sendCommand;
     this.onCDP = onCDP;
     this.offCDP = offCDP;
@@ -192,9 +192,10 @@ export class Inspector extends EventEmitter {
         break;
 
       case CDPNodeType.DOCUMENT_NODE:
-        docNode = this.documentImpl.implementation.createHTMLDocument();
-        // remove default <html> documentElement
-        docNode.removeChild((docNode as Document).documentElement);
+        // Reuse document rather than create a new one, the only exception
+        // remove old <html> documentElement
+        this.document.removeChild(this.document.documentElement);
+        docNode = this.document;
         break;
 
       default:
@@ -394,12 +395,17 @@ export class Inspector extends EventEmitter {
     this.buildDocNode(root);
   }
 
-  // user may need nodeId for other CDP operations or references
-  getNodeId(node: Node): number | undefined {
-    return this.nodeToId.get(node);
+  // Up to date CDPNode (DOM.Node) reference with complete child tree
+  getCdpNode(node: Node): Readonly<CDPNode> | undefined {
+    // maybe the Map should be nodeToCdpNode directly?
+    // Though most just need nodeId. Anyway the performance difference is minor
+    const nodeId = this.nodeToId.get(node);
+    if (nodeId === undefined) return undefined;
+    const nodes = this.idToNodes.get(nodeId);
+    return nodes ? nodes.cdpNode : undefined;
   }
 
-  getNodeById(nodeId: number): Node | undefined {
+  getDocNodeById(nodeId: number): Readonly<Node> | undefined {
     const nodes = this.idToNodes.get(nodeId);
     return nodes ? nodes.docNode : undefined;
   }
