@@ -1,6 +1,6 @@
 export type DOMNode<N> = {
   nodeType: number;
-  children?: Array<N>;
+  children?: Iterable<N>;
 };
 
 // travserse ELEMENT_NODEs only
@@ -22,7 +22,9 @@ export async function traverse<N extends DOMNode<N>>(
       if (node.children) {
         if (parallel)
           await Promise.all(
-            node.children.map((child) => _traverse(child, depth + 1)),
+            Array.from(node.children).map((child) =>
+              _traverse(child, depth + 1),
+            ),
           );
         else
           for (const child of node.children) await _traverse(child, depth + 1);
