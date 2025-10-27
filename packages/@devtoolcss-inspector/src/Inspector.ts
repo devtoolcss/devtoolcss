@@ -37,11 +37,20 @@ export class Inspector extends EventEmitter {
   private idToNodes = new Map<number, { cdpNode: CDPNode; docNode: Node }>();
   private nodeToId = new Map<Node, number>(); // manage removal by events
 
-  private sendCommand: (method: string, params?: object) => Promise<any>;
+  private readonly sendCommand: (
+    method: string,
+    params?: object,
+  ) => Promise<any>;
 
-  private onCDP: (event: string, callback: (data: any) => void) => void;
+  private readonly onCDP: (
+    event: string,
+    callback: (data: any) => void,
+  ) => void;
 
-  private offCDP: (event: string, callback: (data: any) => void) => void;
+  private readonly offCDP: (
+    event: string,
+    callback: (data: any) => void,
+  ) => void;
 
   // describeNode depth -1 is buggy, often return nodeId=0, causing bug
   // devtools use DOM.requestChildNodes and receive the results from DOM.setChildNodes event
