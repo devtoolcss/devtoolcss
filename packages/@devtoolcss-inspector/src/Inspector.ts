@@ -1,5 +1,6 @@
 import { parseGetMatchedStylesForNodeResponse } from "@devtoolcss/parser";
 import { CDPNodeType } from "./constants.js";
+import { ElementWrapper, NodeWrapper } from "./DOMWrappers.js";
 import EventEmitter from "./EventEmitter.js";
 import {
   CDPNode,
@@ -32,25 +33,30 @@ function findNodeIdx(nodes: CDPNode[], nodeId: number): number {
 // anytime event fired
 export class Inspector extends EventEmitter {
   // fixed document object reference
-  readonly document: Document;
+  private document: Document;
 
-  private idToNodes = new Map<number, { cdpNode: CDPNode; docNode: Node }>();
-  private nodeToId = new Map<Node, number>(); // manage removal by events
+  querySelector(selector: string): ElementWrapper | null {
+    const el = this.document.querySelector(selector);
+    return el ? ElementWrapper.get(el, this) : null;
+  }
 
-  private readonly sendCommand: (
-    method: string,
-    params?: object,
-  ) => Promise<any>;
+  querySelectorAll(selector: string): ElementWrapper[] {
+    return Array.from(this.document.querySelectorAll(selector)).map((el) =>
+      ElementWrapper.get(el, this),
+    );
+  }
 
-  private readonly onCDP: (
-    event: string,
-    callback: (data: any) => void,
-  ) => void;
+  private idToNodes = new Map<
+    number,
+    { cdpNode: CDPNode; docNode: NodeWrapper }
+  >();
+  private nodeToId = new Map<NodeWrapper, number>(); // manage removal by events
 
-  private readonly offCDP: (
-    event: string,
-    callback: (data: any) => void,
-  ) => void;
+  readonly sendCommand: (method: string, params?: object) => Promise<any>;
+
+  readonly onCDP: (event: string, callback: (data: any) => void) => void;
+
+  readonly offCDP: (event: string, callback: (data: any) => void) => void;
 
   // describeNode depth -1 is buggy, often return nodeId=0, causing bug
   // devtools use DOM.requestChildNodes and receive the results from DOM.setChildNodes event
@@ -152,7 +158,7 @@ export class Inspector extends EventEmitter {
     return inspector;
   }
 
-  private setMap(nodeId: number, cdpNode: CDPNode, docNode: Node) {
+  private setMap(nodeId: number, cdpNode: CDPNode, docNode: NodeWrapper): void {
     this.idToNodes.set(nodeId, { cdpNode, docNode });
     this.nodeToId.set(docNode, nodeId);
   }
@@ -175,16 +181,16 @@ export class Inspector extends EventEmitter {
   }
 
   private buildDocNode(cdpNode: CDPNode): Node | null {
-    let docNode: Node;
+    let node: Node;
 
     switch (cdpNode.nodeType) {
       case CDPNodeType.ELEMENT_NODE:
         // iframe is safe because no children (not setting pierce)
-        docNode = this.document.createElement(cdpNode.localName);
+        node = this.document.createElement(cdpNode.localName);
 
         if (Array.isArray(cdpNode.attributes)) {
           for (let i = 0; i < cdpNode.attributes.length; i += 2) {
-            (docNode as HTMLElement).setAttribute(
+            (node as HTMLElement).setAttribute(
               cdpNode.attributes[i],
               cdpNode.attributes[i + 1],
             );
@@ -193,34 +199,39 @@ export class Inspector extends EventEmitter {
         break;
 
       case CDPNodeType.TEXT_NODE:
-        docNode = this.document.createTextNode(cdpNode.nodeValue || "");
+        node = this.document.createTextNode(cdpNode.nodeValue || "");
         break;
 
       case CDPNodeType.COMMENT_NODE:
-        docNode = this.document.createComment(cdpNode.nodeValue || "");
+        node = this.document.createComment(cdpNode.nodeValue || "");
         break;
 
       case CDPNodeType.DOCUMENT_NODE:
-        // Reuse document rather than create a new one, the only exception
-        // remove old <html> documentElement
+        this.document = this.document.implementation.createHTMLDocument();
         this.document.removeChild(this.document.documentElement);
-        docNode = this.document;
+        node = this.document;
         break;
 
       default:
         return null;
     }
-    this.setMap(cdpNode.nodeId, cdpNode, docNode);
 
     // Recursively add children
     if (cdpNode.children) {
       for (const child of cdpNode.children) {
         const childNode = this.buildDocNode(child);
-        if (childNode) docNode.appendChild(childNode);
+        if (childNode) node.appendChild(childNode);
       }
     }
 
-    return docNode;
+    const wrappedNode =
+      node.nodeType === CDPNodeType.ELEMENT_NODE ||
+      node.nodeType === CDPNodeType.DOCUMENT_NODE
+        ? ElementWrapper.get(node as Element, this)
+        : NodeWrapper.get(node, this);
+    this.setMap(cdpNode.nodeId, cdpNode, wrappedNode);
+
+    return node;
   }
 
   private onAttributeModified(params: {
@@ -242,7 +253,7 @@ export class Inspector extends EventEmitter {
     } else {
       cdpNode.attributes.push(params.name, params.value);
     }
-    (docNode as Element).setAttribute(params.name, params.value);
+    (docNode.node as Element).setAttribute(params.name, params.value);
   }
 
   private onAttributeRemoved(params: { nodeId: number; name: string }) {
@@ -259,7 +270,7 @@ export class Inspector extends EventEmitter {
     if (attrIndex !== -1) {
       cdpNode.attributes.splice(attrIndex, 2);
     }
-    (docNode as Element).removeAttribute(params.name);
+    (docNode.node as Element).removeAttribute(params.name);
   }
 
   private onCharacterDataModified(params: {
@@ -275,7 +286,7 @@ export class Inspector extends EventEmitter {
     }
     const { cdpNode, docNode } = nodes;
     cdpNode.nodeValue = params.characterData;
-    docNode.nodeValue = params.characterData;
+    docNode.node.nodeValue = params.characterData;
   }
 
   private async onChildNodeInserted(params: {
@@ -328,8 +339,8 @@ export class Inspector extends EventEmitter {
       parentCdpNode.children.splice(prevIdx + 1, 0, params.node);
 
       // insert docNode
-      const referenceNode = parentDocNode.childNodes[prevIdx + 1] || null; // null for append
-      parentDocNode.insertBefore(childDocNode, referenceNode);
+      const referenceNode = parentDocNode.node.childNodes[prevIdx + 1] || null; // null for append
+      parentDocNode.node.insertBefore(childDocNode, referenceNode);
     } else {
       this.emitWarning(
         `onChildNodeInserted: no previous node for nodeId ${params.previousNodeId}`,
@@ -351,7 +362,7 @@ export class Inspector extends EventEmitter {
       parentCdpNode.children.splice(idx, 1);
       this.deleteMap(params.nodeId);
 
-      parentDocNode.removeChild(parentDocNode.childNodes[idx]);
+      parentDocNode.node.removeChild(parentDocNode.node.childNodes[idx]);
     } else {
       this.emitWarning(
         `onChildNodeRemoved: no child node for nodeId ${params.nodeId}`,
@@ -405,7 +416,7 @@ export class Inspector extends EventEmitter {
   }
 
   // Up to date CDPNode (DOM.Node) reference with complete child tree
-  getCdpNode(node: Node): Readonly<CDPNode> | undefined {
+  getCdpNode(node: NodeWrapper): Readonly<CDPNode> | undefined {
     // maybe the Map should be nodeToCdpNode directly?
     // Though most just need nodeId. Anyway the performance difference is minor
     const nodeId = this.nodeToId.get(node);
@@ -414,12 +425,15 @@ export class Inspector extends EventEmitter {
     return nodes ? nodes.cdpNode : undefined;
   }
 
-  getDocNodeById(nodeId: number): Readonly<Node> | undefined {
+  getDocNodeById(nodeId: number): Readonly<NodeWrapper> | undefined {
     const nodes = this.idToNodes.get(nodeId);
     return nodes ? nodes.docNode : undefined;
   }
 
-  async forcePseudoState(node: Node, pseudoClasses: string[]): Promise<void> {
+  async forcePseudoState(
+    node: NodeWrapper,
+    pseudoClasses: string[],
+  ): Promise<void> {
     const nodeId = this.nodeToId.get(node);
     if (!nodeId) {
       throw new Error("Element not found in the inspector's document.");
@@ -443,24 +457,7 @@ export class Inspector extends EventEmitter {
     return object.objectId;
   }
 
-  async scrollToNode(node: Node): Promise<void> {
-    const nodeId = this.nodeToId.get(node);
-    if (!nodeId) {
-      throw new Error("Element not found in the inspector's document.");
-    }
-
-    const objectId = await this.getObjectId(nodeId);
-
-    await this.sendCommand("Runtime.callFunctionOn", {
-      arguments: [],
-      functionDeclaration:
-        "function(){this.scrollIntoView({behavior: 'instant', block: 'center'});}",
-      objectId,
-      silent: true,
-    });
-  }
-
-  async highlightNode(node: Node): Promise<void> {
+  async highlightNode(node: NodeWrapper): Promise<void> {
     const nodeId = this.nodeToId.get(node);
     if (!nodeId) {
       throw new Error("Element not found in the inspector's document.");
@@ -483,16 +480,16 @@ export class Inspector extends EventEmitter {
   }
 
   async inspect(
-    element: Element,
+    element: ElementWrapper,
     options: InspectOptions & { raw: true },
   ): Promise<RawInspectResult>;
   async inspect(
-    element: Element,
+    element: ElementWrapper,
     options?: InspectOptions & { raw?: false },
   ): Promise<ParsedInspectResult>;
 
   async inspect(
-    element: Element, // only allow Element, which have styles
+    element: ElementWrapper, // only allow Element, which have styles
     options: InspectOptions = {},
   ): Promise<InspectResult> {
     const { raw = false, exclude = {}, parseOptions = {} } = options;
