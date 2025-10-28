@@ -18,7 +18,7 @@
   },
   "scripts": {
     "build": "node scripts/copy.js && node scripts/esbuild.config.js",
-    "prepare": "pnpm build",
+    "prepare": "pnpm build && pnpm sync:manifest",
     "watch": "node scripts/watch.js",
     "sync:manifest": "node scripts/sync-manifest.js"
   }
