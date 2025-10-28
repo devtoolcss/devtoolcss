@@ -21,15 +21,15 @@ export class NodeWrapper {
   }
   protected async callFunctionOn(args: any[], functionDeclaration: string) {
     // always do live check first
-    const nodeId = this.inspector.getCdpNode(this);
-    if (!nodeId) {
+    const cdpNode = this.inspector.getCdpNode(this);
+    if (!cdpNode) {
       throw new Error("Node is not tracked in the inspector");
     }
 
     if (!this.objectId) {
       // Get the remote object ID for this node
       const { object } = await this.inspector.sendCommand("DOM.resolveNode", {
-        nodeId,
+        nodeId: cdpNode.nodeId,
       });
       this.objectId = object.objectId;
     }

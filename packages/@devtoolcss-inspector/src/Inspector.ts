@@ -405,6 +405,8 @@ export class Inspector extends EventEmitter {
   }
 
   private async initDOM(): Promise<void> {
+    this.idToNodes.clear();
+    this.nodeToId.clear();
     const { root } = await this.sendCommand("DOM.getDocument", {
       depth: 0,
     });
