@@ -1,5 +1,3 @@
-Shared code about CSS/DOM/Node processign, and basic types & constants. No CDP call, only CDP data.
+Provide function `getInlinedComponent` that returns an element tree with inlined styles. The core inlining logic for [cleanclone](../cleanclone/) and [uiexport](../uiexport/).
 
-## TODO
-
-split to parser and inliner
+TODO: explanation on implementation and optimizer.
