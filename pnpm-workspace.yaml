@@ -1,5 +1,5 @@
 packages:
-  - packages/@devtoolcss-parser
+  - packages/*
 
 onlyBuiltDependencies:
   - esbuild

@@ -54,8 +54,8 @@ export function rewriteResourceLinks(
   return outerHTML;
 }
 
-export function normalizeSameSiteHref(doc: Document, origin: string) {
-  doc.querySelectorAll("a").forEach((el) => {
+export function normalizeSameSiteHref(body: Element, origin: string) {
+  body.querySelectorAll("a").forEach((el) => {
     if (el.href) {
       try {
         const url = new URL(el.href, origin);

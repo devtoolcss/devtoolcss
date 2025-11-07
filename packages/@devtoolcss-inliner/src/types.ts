@@ -1,10 +1,14 @@
-import type { Node, Screen } from "@devtoolcss/inspector";
+import type { Device, CDPNode } from "chrome-inspector";
 import type {
   ParsedCSSPropertyObject,
   ParsedCSSPropertyValue,
 } from "@devtoolcss/parser";
 
-export type NodeWithId = Node & { id: string; children?: NodeWithId[] };
+export type CDPNodeWithId = CDPNode & {
+  id: string;
+  children: CDPNodeWithId[];
+  css: any[];
+};
 
 export type ParsedCSSRules = {
   [selector: string]: ParsedCSSPropertyValue[];
@@ -20,6 +24,6 @@ export type ParsedStyleSheetObjValue = {
 
 export type InlineOptions = {
   highlightNode?: boolean;
-  customScreens?: Screen[];
+  customScreens?: Device[];
   mediaConditions?: string[];
 };

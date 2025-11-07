@@ -1,7 +1,7 @@
-import type { Inspector, Node } from "@devtoolcss/inspector";
 import type { Optimizer } from "./optimizer.js";
 import { parseCSSProperties } from "@devtoolcss/parser";
-import type { ParsedCSSRules, NodeWithId } from "../types.js";
+import type { ParsedCSSRules, CDPNodeWithId } from "../types.js";
+import type { InspectorElement } from "chrome-inspector";
 
 /**
  handling li:has([aria-expanded]) nodes.
@@ -21,16 +21,10 @@ export class AriaExpandedOptimizer implements Optimizer {
    * To be run in beforeTraverse.
    * Collects li:has([aria-expanded]) nodeIds from the rootElement.
    */
-  async beforeTraverse(
-    rootNode: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {
+  async beforeTraverse(root: InspectorElement): Promise<void> {
     try {
-      rootElement.querySelectorAll("li:has([aria-expanded])").forEach((el) => {
-        this.checkChildrenNodeIds.add(
-          Number(el.attributes["data-nodeId"].value),
-        );
+      root.querySelectorAll("li:has([aria-expanded])").forEach((el) => {
+        this.checkChildrenNodeIds.add(Number(el._cdpNode.nodeId));
       });
     } catch {}
   }
@@ -38,57 +32,46 @@ export class AriaExpandedOptimizer implements Optimizer {
   /**
    * To be run before forcePseudoState.
    */
-  async beforeForcePseudo(
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {
+  async beforeForcePseudo(element: InspectorElement): Promise<void> {
     // Collect children styles before forcing pseudo state
-    if (this.checkChildrenNodeIds.has(node.nodeId) && node.children) {
+    if (
+      this.checkChildrenNodeIds.has(element._cdpNode.nodeId) &&
+      element.children
+    ) {
       const childrenStyleBefore = [];
-      for (let i = 0; i < node.children.length; ++i) {
-        const child = node.children[i];
-        const childrenStyle = await inspector.sendCommand(
-          "CSS.getMatchedStylesForNode",
-          {
-            nodeId: child.nodeId,
-          },
-        );
+      for (const child of element.children) {
+        const childrenStyle = await child.getMatchedStyles();
         childrenStyleBefore.push(childrenStyle);
       }
-      this.childrenStyleBefore.set(node.nodeId, childrenStyleBefore);
+      this.childrenStyleBefore.set(
+        element._cdpNode.nodeId,
+        childrenStyleBefore,
+      );
     }
   }
 
   /**
    * To be run before cleanup forcePseudo.
    */
-  async afterForcePseudo(
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {
+  async afterForcePseudo(element: InspectorElement): Promise<void> {
     // Collect children styles after forcing pseudo state
-    if (this.checkChildrenNodeIds.has(node.nodeId) && node.children) {
+    if (
+      this.checkChildrenNodeIds.has(element._cdpNode.nodeId) &&
+      element.children
+    ) {
       const childrenStyleAfter = [];
-      for (let i = 0; i < node.children.length; ++i) {
-        const child = node.children[i];
-        const childrenStyle = await inspector.sendCommand(
-          "CSS.getMatchedStylesForNode",
-          {
-            nodeId: child.nodeId,
-          },
-        );
+      for (const child of element.children) {
+        const childrenStyle = await child.getMatchedStyles();
         childrenStyleAfter.push(childrenStyle);
       }
-      this.childrenStyleAfter.set(node.nodeId, childrenStyleAfter);
+      this.childrenStyleAfter.set(element._cdpNode.nodeId, childrenStyleAfter);
     }
   }
 
   /*
    * To be run after after rewriteSelectors before cascade.
    */
-  afterRewriteSelectors(node: NodeWithId, rules: ParsedCSSRules): void {
+  afterRewriteSelectors(node: CDPNodeWithId, rules: ParsedCSSRules): void {
     const childrenStyleBefore = this.childrenStyleBefore.get(node.nodeId) || [];
     const childrenStyleAfter = this.childrenStyleAfter.get(node.nodeId) || [];
 
