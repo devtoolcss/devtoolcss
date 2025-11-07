@@ -26,8 +26,8 @@
   "type": "module",
   "dependencies": {
     "@devtoolcss/inliner": "workspace:*",
-    "@devtoolcss/inspector": "workspace:*",
     "chalk": "^5.6.2",
+    "chrome-inspector": "^1.0.1",
     "chrome-launcher": "^1.2.1",
     "chrome-remote-interface": "^0.33.3",
     "escape-html": "^1.0.3",

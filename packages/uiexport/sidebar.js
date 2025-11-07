@@ -1,6 +1,6 @@
 /// <reference types="chrome"/>
 
-import { Inspector } from "@devtoolcss/inspector";
+import { Inspector } from "chrome-inspector";
 import { getInlinedComponent } from "@devtoolcss/inliner";
 
 import { getUniqueSelector } from "./selector.js";
@@ -52,16 +52,17 @@ const exportBtn = document.getElementById("exportBtn");
     try {
       await chrome.debugger.attach(target, "1.3");
       const selector = await inspectedWindowEval(getUniqueSelector, "$0");
-      const inspector = Inspector.fromChromeDebugger(
+      const inspector = await Inspector.fromChromeDebugger(
         chrome.debugger,
         target.tabId,
       );
-      inspector.on("progress", (progress) => {
-        updateProgress(progress.completed, progress.total);
-      });
-      const doc = await getInlinedComponent(selector, inspector);
+      const element = await getInlinedComponent(
+        selector,
+        inspector,
+        updateProgress,
+      );
 
-      iframe.contentDocument.body.innerHTML = doc.body.innerHTML;
+      iframe.contentDocument.body.innerHTML = element.outerHTML;
 
       await chrome.debugger.detach(target);
     } catch (e) {

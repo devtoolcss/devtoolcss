@@ -3,7 +3,7 @@ import path from "path";
 import { EventEmitter } from "events";
 import CDP from "chrome-remote-interface";
 import * as ChromeLauncher from "chrome-launcher";
-import { Inspector, type Screen } from "@devtoolcss/inspector";
+import { Inspector, type Device } from "chrome-inspector";
 import { getInlinedComponent } from "@devtoolcss/inliner";
 import {
   getAvailableFilename,
@@ -88,7 +88,7 @@ export class Crawler extends EventEmitter {
   private downloadedURLs = new Set<string>();
   private assetDir = "";
   private fontCSSPath = "";
-  private screens: Screen[] = [];
+  private screens: Device[] = [];
   private mediaConditions: string[];
   private toHighlight = false;
 
@@ -484,21 +484,26 @@ export class Crawler extends EventEmitter {
     });
 
     // @ts-ignore
-    const inspector = Inspector.fromCDPClient(client);
-    inspector.on("progress", ({ completed, total }) => {
-      this.emitProgress({
-        crawlProgress: {
-          processedElements: completed,
-          totalElements: total,
-        },
-      });
-    });
+    const inspector = await Inspector.fromCDPClient(client);
     inspector.on("error", this.onError);
-    const doc = await getInlinedComponent("body", inspector, this.onError, {
-      customScreens: this.screens,
-      mediaConditions: this.mediaConditions,
-      highlightNode: this.toHighlight,
-    });
+    const body = await getInlinedComponent(
+      "body",
+      inspector,
+      (completed, total) => {
+        this.emitProgress({
+          crawlProgress: {
+            processedElements: completed,
+            totalElements: total,
+          },
+        });
+      },
+      this.onError,
+      {
+        customScreens: this.screens,
+        mediaConditions: this.mediaConditions,
+        highlightNode: this.toHighlight,
+      },
+    );
 
     // stop recording requests
     // @ts-ignore TODO: fix typing upstream
@@ -544,17 +549,19 @@ export class Crawler extends EventEmitter {
       pageBase = path.dirname(path.join(pagePath, "dummy"));
     }
     const origin = getOrigin(pageURL);
-    normalizeSameSiteHref(doc, origin);
-    // Insert the font link tag as the first child of <head>
-    const fontLink = doc.createElement("link");
-    fontLink.rel = "stylesheet";
-    fontLink.href = "/fonts.css";
-    const head = doc.querySelector("head");
-    head.insertBefore(fontLink, head.firstChild);
-    const rawHtml = doc.documentElement.outerHTML;
-    let outerHTML =
-      "<!DOCTYPE html>\n" +
-      rewriteResourceLinks(origin, pageBase, resources, rawHtml);
+    normalizeSameSiteHref(body, origin);
+    const bodyHTML = rewriteResourceLinks(
+      origin,
+      pageBase,
+      resources,
+      body.outerHTML,
+    );
+    let outerHTML = `<!DOCTYPE html>
+<html>
+<head><link rel="stylesheet" href="/fonts.css"></head>
+${bodyHTML}
+</html>
+`;
     outerHTML = beautify.html(outerHTML, {
       indent_size: 2,
       wrap_line_length: 0, // disable line wrapping
@@ -567,7 +574,7 @@ export class Crawler extends EventEmitter {
     await client.close();
   }
 
-  private buildScreens(): Screen[] {
+  private buildScreens(): Device[] {
     return this.cfg.deviceWidths.map((width) => ({
       width,
       height: this.cfg.screenHeight,

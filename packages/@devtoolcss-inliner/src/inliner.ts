@@ -6,17 +6,21 @@ import type {
   ParsedCSSPropertyObject,
   ParsedCSSPropertyValue,
 } from "@devtoolcss/parser";
-import { Inspector, CDPNodeType } from "@devtoolcss/inspector";
+import {
+  Inspector,
+  CDPNodeType,
+  CDPNode,
+  InspectorElement,
+} from "chrome-inspector";
 import { iterateParsedCSS, traverse } from "@devtoolcss/parser";
 import { forciblePseudoClasses } from "./constants.js";
 import {
   AriaExpandedOptimizer,
   PrunePsuedoElementOptimizer,
-  invokeOptimizers,
 } from "./optimizers/index.js";
 
 import type {
-  NodeWithId,
+  CDPNodeWithId,
   ParsedCSSRulesObjValue,
   ParsedStyleSheetObjValue,
   ParsedCSSRules,
@@ -51,6 +55,7 @@ function getRewrittenSelectors(
   return [...rewrittenSelectors];
 }
 
+// TODO: check why outer not replaced
 function replaceVariables(
   rules: ParsedCSSRulesObjValue,
 ): ParsedCSSRulesObjValue {
@@ -135,8 +140,16 @@ function rewriteSelectors(parsed: ParsedCSS, id: string): ParsedCSSRules {
   return rules;
 }
 
+function removeOrigins(parsed: ParsedCSS, originsToRemove: string[]): void {
+  for (let i = parsed.matched.length - 1; i >= 0; --i) {
+    if (originsToRemove.includes(parsed.matched[i].origin)) {
+      parsed.matched.splice(i, 1);
+    }
+  }
+}
+
 function getInlineText(
-  node: NodeWithId,
+  node: CDPNodeWithId,
   parsedCSSs: ParsedCSS[],
   mediaConditions: string[],
   optimizers: Optimizer[],
@@ -144,8 +157,11 @@ function getInlineText(
   const mediaRules: ParsedStyleSheetObjValue = {};
   for (let i = 0; i < parsedCSSs.length; i++) {
     const parsed = parsedCSSs[i];
+    removeOrigins(parsed, ["user-agent"]);
     const rules = rewriteSelectors(parsed, node.id!);
-    invokeOptimizers(optimizers, "afterRewriteSelectors", node, rules);
+    for (const optimizer of optimizers) {
+      optimizer.afterRewriteSelectors(node, rules);
+    }
     const inlineRules = cascade(rules);
 
     mediaRules[mediaConditions[i]] = replaceVariables(inlineRules);
@@ -209,37 +225,33 @@ function getInlineText(
   return style;
 }
 
-function setIdAttrs(node): NodeWithId {
+function initIdCSS(node: CDPNode): CDPNodeWithId {
   let id = `node-${node.nodeId}`;
   let hasId = false;
-  /*
-  if (!node.attributes) {
-    const { attributes } = await DOM.getAttributes({
-      nodeId: node.nodeId,
-    });
-    node.attributes = attributes;
-  }
-  */
-  for (let i = 0; i < node.attributes.length; i += 2) {
-    if (node.attributes[i] === "id") {
-      id = node.attributes[i + 1];
-      if (id.includes(":")) {
-        // can break selector
-        id = id.replace(/:/g, "-");
-        node.attributes[i + 1] = id;
+
+  if (node.attributes) {
+    for (let i = 0; i < node.attributes.length; i += 2) {
+      if (node.attributes[i] === "id") {
+        id = node.attributes[i + 1];
+        if (id.includes(":")) {
+          // can break selector
+          id = id.replace(/:/g, "-");
+          node.attributes[i + 1] = id;
+        }
+        hasId = true;
+        break;
       }
-      hasId = true;
-      break;
+    }
+    if (!hasId) {
+      node.attributes.push("id", id);
     }
   }
-  if (!hasId) {
-    node.attributes.push("id", id);
-  }
   node.id = id;
-  return node;
+  node.css = [];
+  return node as CDPNodeWithId;
 }
 
-function mergeTrees(roots: NodeWithId[], nScreens: number): NodeWithId {
+function mergeTrees(roots: CDPNodeWithId[], nScreens: number): CDPNodeWithId {
   const mergedRoot = roots[0];
   // merge css, filling missing with display: none
   if (mergedRoot.nodeType === CDPNodeType.ELEMENT_NODE) {
@@ -275,7 +287,7 @@ function mergeTrees(roots: NodeWithId[], nScreens: number): NodeWithId {
     return mergedRoot;
   }
 
-  const nodeMap = new Map<number, NodeWithId[]>();
+  const nodeMap = new Map<number, CDPNodeWithId[]>();
 
   for (const root of roots) {
     if (root.children) {
@@ -297,14 +309,15 @@ function mergeTrees(roots: NodeWithId[], nScreens: number): NodeWithId {
 }
 
 function inlineStyle(
-  document: Document, // JSDOM or browser DOM
+  element: Element, // JSDOM or browser DOM
   cssAttr = "data-css",
   removeAttr = true,
 ) {
   // clean scripts/styles/links
-  document.querySelectorAll("script, link, style").forEach((el) => el.remove());
+  element.querySelectorAll("script, link, style").forEach((el) => el.remove());
 
-  const elements = document.querySelectorAll(`[${cssAttr}]`);
+  const elements = Array.from(element.querySelectorAll(`[${cssAttr}]`));
+  elements.push(element); // include root element
   for (const el of elements) {
     const cssText = el.getAttribute(cssAttr);
     if (cssText) {
@@ -313,7 +326,7 @@ function inlineStyle(
         // inline style can contain variables and override resolved stylesheet
         (el as HTMLElement).removeAttribute("style");
 
-        const styleEl = document.createElement("style");
+        const styleEl = element.ownerDocument.createElement("style");
         styleEl.textContent = cssText;
         // keep here for stringify and eval
         const noChildTags = [
@@ -343,6 +356,8 @@ function inlineStyle(
         if (noChildTags.includes(el.tagName) || el.children.length === 0) {
           // prevent break :empty for those with no children
           // still may break :nth-child()
+
+          // TODO: fix for root element
           el.parentNode.insertBefore(styleEl, el);
         } else {
           el.insertBefore(styleEl, el.children[0]);
@@ -365,12 +380,66 @@ function inlineStyle(
   }
 }
 
+function buildNodeTree(
+  cdpNode: CDPNodeWithId,
+  document: Document,
+): Node | null {
+  let docNode: Node;
+
+  switch (cdpNode.nodeType) {
+    case CDPNodeType.ELEMENT_NODE:
+      // iframe is safe because no children (not setting pierce)
+      docNode = document.createElement(cdpNode.localName);
+
+      if (Array.isArray(cdpNode.attributes)) {
+        for (let i = 0; i < cdpNode.attributes.length; i += 2) {
+          (docNode as HTMLElement).setAttribute(
+            cdpNode.attributes[i],
+            cdpNode.attributes[i + 1],
+          );
+        }
+      }
+      break;
+
+    case CDPNodeType.TEXT_NODE:
+      docNode = document.createTextNode(cdpNode.nodeValue || "");
+      break;
+
+    case CDPNodeType.COMMENT_NODE:
+      docNode = document.createComment(cdpNode.nodeValue || "");
+      break;
+
+    default:
+      return null;
+  }
+
+  // Recursively add children
+  if (cdpNode.children) {
+    for (const child of cdpNode.children) {
+      const childNode = buildNodeTree(child, document);
+      if (childNode) docNode.appendChild(childNode);
+    }
+  }
+  return docNode;
+}
+
+function getFreezedCdpTree(cdpNode: CDPNode): CDPNodeWithId {
+  const nodeWithId = initIdCSS({ ...cdpNode });
+  nodeWithId.css = [];
+  nodeWithId.children = [];
+  for (const child of cdpNode.children || []) {
+    nodeWithId.children.push(getFreezedCdpTree(child));
+  }
+  return nodeWithId;
+}
+
 async function getInlinedComponent(
   selector: string,
   inspector: Inspector,
+  onProgress: (completed: number, total: number) => void = () => {},
   onError: (e: any) => void = () => {},
   options: InlineOptions = {},
-): Promise<Document> {
+): Promise<Element> {
   const { highlightNode = false } = options;
   let { customScreens, mediaConditions } = options;
   if (!customScreens) {
@@ -386,86 +455,69 @@ async function getInlinedComponent(
     new AriaExpandedOptimizer(),
     new PrunePsuedoElementOptimizer(),
   ];
-  const roots = [];
+  const freezedRoots = [];
   for (let i = 0; i < customScreens.length; ++i) {
-    const node = await inspector.inspect(selector, {
-      depth: -1,
-      computed: false,
-      parseOptions: { excludeOrigin: ["user-agent"], removeUnusedVar: true },
-      customScreen: customScreens[i],
-      beforeTraverse: async (rootNode, inspector, rootElement) => {
-        await invokeOptimizers(
-          optimizers,
-          "beforeTraverse",
-          rootNode,
-          inspector,
-          rootElement,
-        );
-      },
-      beforeGetMatchedStyle: async (node, inspector, rootElement) => {
-        if (highlightNode) {
-          const objectId = await inspector.getNodeObjectId(node);
-          await inspector.scrollToNode(objectId);
-          await inspector.highlightNode(objectId);
-        }
+    if (customScreens[i]) {
+      await inspector.setDevice(customScreens[i]);
+    }
+    const root = inspector.querySelector(selector);
+    for (const optimizer of optimizers) {
+      await optimizer.beforeTraverse(root);
+    }
+    const freezedCdpRoot = getFreezedCdpTree(root._cdpNode);
 
-        await invokeOptimizers(
-          optimizers,
-          "beforeForcePseudo",
-          node,
-          inspector,
-          rootElement,
-        );
-
-        // Force all pseudo classes
-        await inspector.sendCommand("CSS.forcePseudoState", {
-          nodeId: node.nodeId,
-          forcedPseudoClasses: forciblePseudoClasses,
-        });
-      },
-      afterGetMatchedStyle: async (node, inspector, rootElement) => {
-        await invokeOptimizers(
-          optimizers,
-          "afterForcePseudo",
-          node,
-          inspector,
-          rootElement,
-        );
-
-        // Cleanup forced pseudo classes
-        await inspector.sendCommand("CSS.forcePseudoState", {
-          nodeId: node.nodeId,
-          forcedPseudoClasses: [],
-        });
-
-        if (highlightNode) {
-          await inspector.hideHighlight();
-        }
-      },
-    });
-    // label css by screen idx
+    let total = 0;
     await traverse(
-      node,
-      (n) => {
-        n.css = [];
-        n.css[i] = n.styles;
+      freezedCdpRoot,
+      async (freezedNode: CDPNodeWithId) => {
+        total += 1;
       },
       onError,
       -1,
-      true,
+      false,
     );
-    roots.push(node);
+
+    let completed = 0;
+    await traverse(
+      freezedCdpRoot,
+      async (freezedNode: CDPNodeWithId) => {
+        const inspectorElement = inspector.getNodeByNodeId(
+          freezedNode.nodeId,
+        ) as InspectorElement;
+        if (highlightNode) {
+          await inspectorElement.scrollIntoView();
+          await inspector.highlightNode(inspectorElement);
+        }
+
+        for (const optimizer of optimizers) {
+          await optimizer.beforeForcePseudo(inspectorElement);
+        }
+
+        await inspector.forcePseudoState(
+          inspectorElement,
+          forciblePseudoClasses,
+        );
+
+        for (const optimizer of optimizers) {
+          await optimizer.afterForcePseudo(inspectorElement);
+        }
+
+        freezedNode.css[i] = await inspectorElement.getMatchedStyles({
+          parseOptions: { removeUnusedVar: true },
+        });
+        await inspector.forcePseudoState(inspectorElement, []); // reset forced pseudo states
+        onProgress(++completed, total);
+      },
+      onError,
+      -1,
+      false,
+    );
+    if (highlightNode) {
+      await inspector.hideHighlight();
+    }
+    freezedRoots.push(freezedCdpRoot);
   }
-  const root = mergeTrees(roots, customScreens.length);
-  await traverse(
-    root,
-    (node) => {
-      setIdAttrs(node);
-    },
-    onError,
-    -1,
-    true,
-  );
+  const root = mergeTrees(freezedRoots, customScreens.length);
   // after all node.id are set
   await traverse(
     root,
@@ -482,9 +534,12 @@ async function getInlinedComponent(
     -1,
     true,
   );
-  const doc = Inspector.nodeToDOM(root);
-  inlineStyle(doc);
-  return doc;
+  const docRoot = buildNodeTree(
+    root,
+    inspector.documentImpl.createHTMLDocument(),
+  ) as Element;
+  inlineStyle(docRoot);
+  return docRoot;
 }
 
 export { getInlinedComponent };

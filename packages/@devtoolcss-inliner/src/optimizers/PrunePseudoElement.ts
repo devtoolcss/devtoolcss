@@ -1,6 +1,6 @@
-import type { Inspector, Node } from "@devtoolcss/inspector";
+import type { InspectorElement } from "chrome-inspector";
 import type { Optimizer } from "./optimizer.js";
-import type { ParsedCSSRules, NodeWithId } from "../types.js";
+import type { ParsedCSSRules, CDPNodeWithId } from "../types.js";
 import { getNormalizedSuffix } from "../utils.js";
 import * as CSSwhat from "css-what";
 
@@ -10,28 +10,16 @@ import * as CSSwhat from "css-what";
 export class PrunePsuedoElementOptimizer implements Optimizer {
   constructor() {}
 
-  async beforeTraverse(
-    rootNode: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {}
+  async beforeTraverse(element: InspectorElement): Promise<void> {}
 
-  async beforeForcePseudo(
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {}
+  async beforeForcePseudo(element: InspectorElement): Promise<void> {}
 
-  async afterForcePseudo(
-    node: Node,
-    inspector: Inspector,
-    rootElement: Element,
-  ): Promise<void> {}
+  async afterForcePseudo(element: InspectorElement): Promise<void> {}
 
   /**
    * clean up after rewriteSelectors.
    */
-  afterRewriteSelectors(node: NodeWithId, rules: ParsedCSSRules): void {
+  afterRewriteSelectors(node: CDPNodeWithId, rules: ParsedCSSRules): void {
     for (const [selector, properties] of Object.entries(rules)) {
       const suffix = getNormalizedSuffix(CSSwhat.parse(selector)[0]);
       if (suffix.endsWith("before") || suffix.endsWith("after")) {
