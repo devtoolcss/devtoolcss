@@ -1,6 +1,6 @@
 {
   "name": "@devtoolcss/inliner",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "A CSS inliner library powered by Chrome DevTools Protocol.",
   "license": "MIT",
   "files": [
