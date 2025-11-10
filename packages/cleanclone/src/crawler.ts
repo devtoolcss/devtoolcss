@@ -486,7 +486,7 @@ export class Crawler extends EventEmitter {
     // @ts-ignore
     const inspector = await Inspector.fromCDPClient(client);
     inspector.on("error", this.onError);
-    const body = await getInlinedComponent(
+    const { element: body } = await getInlinedComponent(
       "body",
       inspector,
       (completed, total) => {

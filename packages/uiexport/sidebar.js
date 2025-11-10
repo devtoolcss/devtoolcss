@@ -56,13 +56,15 @@ const exportBtn = document.getElementById("exportBtn");
         chrome.debugger,
         target.tabId,
       );
-      const element = await getInlinedComponent(
+      const { element, rootStyle } = await getInlinedComponent(
         selector,
         inspector,
         updateProgress,
       );
 
-      iframe.contentDocument.body.innerHTML = element.outerHTML;
+      iframe.contentDocument.body.innerHTML = rootStyle
+        ? rootStyle.outerHTML + "\n" + element.outerHTML
+        : element.outerHTML;
 
       await chrome.debugger.detach(target);
     } catch (e) {

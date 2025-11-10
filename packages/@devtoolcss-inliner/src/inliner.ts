@@ -312,9 +312,11 @@ function inlineStyle(
   element: Element, // JSDOM or browser DOM
   cssAttr = "data-css",
   removeAttr = true,
-) {
+): { element: Element; rootStyle?: Element } {
   // clean scripts/styles/links
   element.querySelectorAll("script, link, style").forEach((el) => el.remove());
+
+  let rootStyle: Element | undefined;
 
   const elements = Array.from(element.querySelectorAll(`[${cssAttr}]`));
   elements.push(element); // include root element
@@ -356,9 +358,8 @@ function inlineStyle(
         if (noChildTags.includes(el.tagName) || el.children.length === 0) {
           // prevent break :empty for those with no children
           // still may break :nth-child()
-
-          // TODO: fix for root element
-          el.parentNode.insertBefore(styleEl, el);
+          if (el === element) rootStyle = styleEl;
+          else el.parentNode.insertBefore(styleEl, el);
         } else {
           el.insertBefore(styleEl, el.children[0]);
         }
@@ -378,6 +379,7 @@ function inlineStyle(
       }
     }
   }
+  return { element, rootStyle };
 }
 
 function buildNodeTree(
@@ -439,7 +441,7 @@ async function getInlinedComponent(
   onProgress: (completed: number, total: number) => void = () => {},
   onError: (e: any) => void = () => {},
   options: InlineOptions = {},
-): Promise<Element> {
+): Promise<{ element: Element; rootStyle?: Element }> {
   const { highlightNode = false } = options;
   let { customScreens, mediaConditions } = options;
   if (!customScreens) {
@@ -486,7 +488,7 @@ async function getInlinedComponent(
         ) as InspectorElement;
         if (highlightNode) {
           await inspectorElement.scrollIntoView();
-          await inspector.highlightNode(inspectorElement);
+          await inspectorElement.highlight();
         }
 
         for (const optimizer of optimizers) {
@@ -534,12 +536,11 @@ async function getInlinedComponent(
     -1,
     true,
   );
-  const docRoot = buildNodeTree(
+  const elementRoot = buildNodeTree(
     root,
     inspector.documentImpl.createHTMLDocument(),
   ) as Element;
-  inlineStyle(docRoot);
-  return docRoot;
+  return inlineStyle(elementRoot);
 }
 
 export { getInlinedComponent };
