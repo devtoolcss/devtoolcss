@@ -18,8 +18,8 @@ importers:
         specifier: workspace:*
         version: link:../@devtoolcss-parser
       chrome-inspector:
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       css-what:
         specifier: ^7.0.0
         version: 7.0.0
@@ -49,8 +49,8 @@ importers:
         specifier: ^5.6.2
         version: 5.6.2
       chrome-inspector:
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       chrome-launcher:
         specifier: ^1.2.1
         version: 1.2.1
@@ -107,8 +107,8 @@ importers:
         specifier: workspace:*
         version: link:../@devtoolcss-inliner
       chrome-inspector:
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
@@ -437,8 +437,8 @@ packages:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
     engines: {node: '>= 14.16.0'}
 
-  chrome-inspector@1.0.2:
-    resolution: {integrity: sha512-OGPtxtQseM8rcBUXePR9cKtC2UdfJlTG7krZ/UbBWGBrPedGf8x21qZeKIqJAWNzGpspM+zzBVktfEFpUFv5aA==}
+  chrome-inspector@1.0.3:
+    resolution: {integrity: sha512-rF2YrgaCzZNOimM91ESna+4+dTHBMJlDViDUvkwVHsEOxZzrPoeZ4mldP5zOZYFhWpgDrDnIMUlycEKsbq56Ag==}
 
   chrome-launcher@1.2.1:
     resolution: {integrity: sha512-qmFR5PLMzHyuNJHwOloHPAHhbaNglkfeV/xDtt5b7xiFFyU1I+AZZX0PYseMuhenJSSirgxELYIbswcoc+5H4A==}
@@ -1263,7 +1263,7 @@ snapshots:
     dependencies:
       readdirp: 4.1.2
 
-  chrome-inspector@1.0.2:
+  chrome-inspector@1.0.3:
     dependencies:
       '@devtoolcss/parser': 1.0.1
       jsdom: 27.1.0

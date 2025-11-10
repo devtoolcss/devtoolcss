@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@devtoolcss/inliner": "workspace:*",
-    "chrome-inspector": "^1.0.2",
+    "chrome-inspector": "^1.0.3",
     "highlight.js": "^11.11.1",
     "js-beautify": "^1.15.4"
   },
