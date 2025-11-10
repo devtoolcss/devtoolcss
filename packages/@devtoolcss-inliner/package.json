@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@devtoolcss/parser": "workspace:*",
-    "chrome-inspector": "^1.0.1",
+    "chrome-inspector": "^1.0.2",
     "css-what": "^7.0.0",
     "postcss": "^8.5.6",
     "postcss-var-replace": "^1.0.0"
