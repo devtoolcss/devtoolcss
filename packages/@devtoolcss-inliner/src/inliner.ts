@@ -11,8 +11,13 @@ import {
   CDPNodeType,
   CDPNode,
   InspectorElement,
+  GetMatchedStylesForNodeResponse,
 } from "chrome-inspector";
-import { iterateParsedCSS, traverse } from "@devtoolcss/parser";
+import {
+  iterateParsedCSS,
+  parseGetMatchedStylesForNodeResponse,
+  traverse,
+} from "@devtoolcss/parser";
 import { forciblePseudoClasses } from "./constants.js";
 import {
   AriaExpandedOptimizer,
@@ -518,8 +523,12 @@ async function getInlinedComponent(
           await optimizer.afterForcePseudo(inspectorElement);
         }
 
-        freezedNode.css[i] = await inspectorElement.getMatchedStyles({
-          parseOptions: { removeUnusedVar: true },
+        const resp = (await inspectorElement.getMatchedStyles({
+          raw: true,
+        })) as GetMatchedStylesForNodeResponse;
+        // use parser in workspace for easier debugging
+        freezedNode.css[i] = parseGetMatchedStylesForNodeResponse(resp, {
+          removeUnusedVar: true,
         });
         await inspector.forcePseudoState(inspectorElement, []); // reset forced pseudo states
         onProgress(++completed, total);
