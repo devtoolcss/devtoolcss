@@ -427,7 +427,6 @@ function buildNodeTree(
 
 function getFreezedCdpTree(cdpNode: CDPNode): CDPNodeWithId {
   const nodeWithId = initIdCSS({ ...cdpNode });
-  nodeWithId.css = [];
   nodeWithId.children = [];
   for (const child of cdpNode.children || []) {
     nodeWithId.children.push(getFreezedCdpTree(child));
@@ -457,6 +456,15 @@ async function getInlinedComponent(
     new AriaExpandedOptimizer(),
     new PrunePsuedoElementOptimizer(),
   ];
+
+  const warnChildNodeRemoved = (params) => {
+    onError(
+      `Warning: DOM.childNodeRemoved triggered during tree freezed: ${JSON.stringify(
+        params,
+      )}`,
+    );
+  };
+
   const freezedRoots = [];
   for (let i = 0; i < customScreens.length; ++i) {
     if (customScreens[i]) {
@@ -466,6 +474,12 @@ async function getInlinedComponent(
     for (const optimizer of optimizers) {
       await optimizer.beforeTraverse(root);
     }
+
+    // need to await to transfer execution to inspector to update the node info
+    // and wait DOM change after changing device metrics
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    inspector.on("DOM.childNodeRemoved", warnChildNodeRemoved);
     const freezedCdpRoot = getFreezedCdpTree(root._cdpNode);
 
     let total = 0;
@@ -514,11 +528,13 @@ async function getInlinedComponent(
       -1,
       false,
     );
+    inspector.off("DOM.childNodeRemoved", warnChildNodeRemoved);
     if (highlightNode) {
       await inspector.hideHighlight();
     }
     freezedRoots.push(freezedCdpRoot);
   }
+
   const root = mergeTrees(freezedRoots, customScreens.length);
   // after all node.id are set
   await traverse(
