@@ -25,10 +25,7 @@ export class PrunePsuedoElementOptimizer implements Optimizer {
       if (suffix.endsWith("before") || suffix.endsWith("after")) {
         let hasIneffectiveContent = true;
         for (const prop of properties) {
-          if (
-            prop.name === "content" &&
-            !["normal", '""', "''"].includes(prop.value)
-          ) {
+          if (prop.name === "content" && prop.value !== "normal") {
             hasIneffectiveContent = false;
           }
         }
