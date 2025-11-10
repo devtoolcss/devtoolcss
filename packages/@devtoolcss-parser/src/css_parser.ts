@@ -282,7 +282,7 @@ export function parseGetMatchedStylesForNodeResponse(
         appliedProperties,
         false,
       );
-      parsed.pseudoElements[match.pseudoType] = parsedRules;
+      parsed.pseudoElements.push(...parsedRules);
     }
   }
 
