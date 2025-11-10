@@ -60,7 +60,44 @@ function getRewrittenSelectors(
   return [...rewrittenSelectors];
 }
 
-// TODO: check why outer not replaced
+/*
+ * Fix selectors with multiple pseudo-elements by keeping only the first one
+ * Example:
+ *   #ab::before {
+ *     --v: '';
+ *   }
+ *
+ *   #ab::after{
+ *     content: var(--v);
+ *   }
+ *
+ * becomes
+ *   #ab::after{
+ *     content: undefined;
+ *   }
+ *
+ *   #ab::after::before{
+ *     content: '';
+ *   }
+ */
+function fixSelector(selector: string): string {
+  const parsedSelector = CSSwhat.parse(selector)[0];
+  let pseudoElements: number[] = [];
+  for (let i = 0; i < parsedSelector.length; i++) {
+    if (parsedSelector[i].type === "pseudo-element") {
+      pseudoElements.push(i);
+    }
+  }
+  if (pseudoElements.length > 1) {
+    for (let j = pseudoElements.length - 1; j > 0; j--) {
+      parsedSelector.splice(pseudoElements[j], 1);
+    }
+    return CSSwhat.stringify([parsedSelector]);
+  } else {
+    return selector;
+  }
+}
+
 function replaceVariables(
   rules: ParsedCSSRulesObjValue,
 ): ParsedCSSRulesObjValue {
@@ -69,7 +106,7 @@ function replaceVariables(
   const { root } = postcss([postcssVarReplace()]).process(styleSheet);
   const replaced: ParsedCSSRulesObjValue = {};
   root.walkRules((rule) => {
-    const selector = rule.selector;
+    const selector = fixSelector(rule.selector);
     if (!replaced[selector]) {
       replaced[selector] = {};
     }
