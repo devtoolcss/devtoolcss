@@ -34,6 +34,16 @@ importers:
         specifier: ^0.0.1528500
         version: 0.0.1528500
 
+  packages/@devtoolcss-mcp:
+    dependencies:
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
+    devDependencies:
+      '@types/chrome':
+        specifier: ^0.1.27
+        version: 0.1.27
+
   packages/@devtoolcss-parser:
     devDependencies:
       devtools-protocol:

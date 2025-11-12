@@ -1,0 +1,17 @@
+{
+  "name": "@devtoolcss/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Chrome extension with WebSocket polling to MCP server",
+  "main": "ws-server.js",
+  "scripts": {
+    "server": "node ws-server.js",
+    "dev": "node ws-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.27"
+  }
+}
