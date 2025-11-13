@@ -3,15 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "description": "Chrome extension with WebSocket polling to MCP server",
-  "main": "ws-server.js",
+  "type": "module",
   "scripts": {
-    "server": "node ws-server.js",
-    "dev": "node ws-server.js"
+    "build": "node scripts/copy.js && node scripts/esbuild.config.js",
+    "prepare": "pnpm build && pnpm sync:manifest",
+    "watch": "node scripts/watch.js",
+    "sync:manifest": "node scripts/sync-manifest.js"
   },
   "dependencies": {
+    "chrome-inspector": "link:/home/bill/chrome-inspector/",
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.27"
+    "@types/chrome": "^0.1.27",
+    "chokidar": "^4.0.3",
+    "esbuild": "^0.27.0"
   }
 }

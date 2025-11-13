@@ -4,9 +4,10 @@
   "manifest_version": 3,
   "description": "Chrome extension with WebSocket polling to MCP server",
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "debugger", "offscreen"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "DevtoolCSS MCP Settings"

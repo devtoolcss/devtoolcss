@@ -17,18 +17,87 @@ let settings = {
   pollingInterval: 2000, // 2 seconds
 };
 
-// Handle messages from server
-function handleMessage(data) {
-  console.log("[Handler] Processing message:", data);
-  // TODO: Implement your message handling logic here
+async function getActiveTabId() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const activeTab = tabs[0];
+  return activeTab.id;
+}
+
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  console.log(`Tab ${tabId} closed`);
+  // Clean up any resources related to this tab
+  chrome.runtime.sendMessage({
+    event: "TAB_CLOSED",
+    tabId: tabId,
+  });
+});
+
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  // Forward debugger events to offscreen inspector
+  chrome.runtime.sendMessage({
+    event: "DEBUGGER_EVENT",
+    source,
+    method,
+    params,
+  });
+});
+
+// Handle debugger commands from offscreen
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  switch (msg.type) {
+    case "DEBUGGER_SEND_COMMAND":
+      try {
+        chrome.debugger.sendCommand(
+          msg.target,
+          msg.method,
+          msg.params,
+          (result) => {
+            sendResponse({ result });
+          },
+        );
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      break;
+    case "DEBUGGER_ATTACH":
+      try {
+        chrome.debugger.attach(msg.target, "1.3", () => {
+          sendResponse({ success: true });
+        });
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      break;
+    case "DEBUGGER_DETACH":
+      try {
+        chrome.debugger.detach(msg.target, () => {
+          sendResponse({ success: true });
+        });
+      } catch (error) {
+        sendResponse({ error: error.message });
+      }
+      break;
+  }
+  return true; // Keep the message channel open for async response
+});
+
+// Main serving logic
+async function handleRequest(request) {
+  const activeTabId = await getActiveTabId();
+  const response = await chrome.runtime.sendMessage({
+    ...request,
+    tabId: activeTabId,
+  });
+  return response;
 }
 
 // Listen for settings changes
-chrome.storage.onChanged.addListener(async (changes, areaName) => {
-  await loadSettings();
-  if (changes.pollingEnabled.newValue && !changes.pollingEnabled.oldValue) {
-    pollAndConnect();
-  }
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  loadSettings().then(() => {
+    if (changes.pollingEnabled.newValue && !changes.pollingEnabled.oldValue) {
+      pollAndConnect();
+    }
+  });
 });
 
 // Load settings from storage
@@ -83,15 +152,15 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.log("[WS] Connected successfully");
-    // Send a test message
-    ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
   };
 
-  ws.onmessage = (event) => {
-    console.log("[WS] Message received:", event.data);
+  ws.onmessage = async (event) => {
+    console.log("[WS] Request received:", event.data);
     try {
-      const data = JSON.parse(event.data);
-      handleMessage(data);
+      const req = JSON.parse(event.data);
+      const response = await handleRequest(req);
+      console.log("response:", response);
+      ws.send(JSON.stringify({ id: req.id, ...response }));
     } catch (e) {
       console.error("[WS] Failed to parse message:", e);
     }
@@ -127,15 +196,23 @@ async function pollAndConnect() {
   }
 }
 
+async function main() {
+  await loadSettings();
+  await chrome.offscreen.createDocument({
+    url: "offscreen_inspectors.html",
+    reasons: ["DOM_PARSER"],
+    justification: "Providing DOM implementation for inspector.",
+  });
+  pollAndConnect();
+}
+
 // Handle extension lifecycle
 chrome.runtime.onStartup.addListener(() => {
   console.log("[Lifecycle] Extension started");
-  keepAlive();
-  loadSettings().then(() => pollAndConnect());
+  main();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[Lifecycle] Extension installed/updated");
-  keepAlive();
-  loadSettings().then(() => pollAndConnect());
+  main();
 });
