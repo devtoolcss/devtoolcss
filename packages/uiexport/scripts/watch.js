@@ -25,7 +25,7 @@ chokidar.watch(".").on("change", (path) => {
     // any js change could affect the bundle
     console.log(`Rebuilding due to change in ${path}`);
     exec(
-      "NODE_ENV=development node esbuild.config.js",
+      "NODE_ENV=development node scripts/esbuild.config.js",
       (error, stdout, stderr) => {
         if (error) {
           console.error(`Error during build: ${stderr}`);
