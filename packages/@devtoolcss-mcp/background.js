@@ -88,6 +88,7 @@ async function handleRequest(request) {
     ...request,
     tabId: activeTabId,
   });
+  console.log("response received:", response);
   return response;
 }
 
