@@ -1,12 +1,22 @@
 export class BiWeakNodeMap {
   constructor() {
-    this.idCnt = 0;
+    this._nodeCounters = new Map(); // nodeName -> counter
     this._idToRef = new Map(); // id -> WeakRef(node)
     this._nodeToId = new WeakMap(); // node -> id
   }
 
+  generateId(node) {
+    const nodeName = node.nodeName.toLowerCase();
+    const counter = this._nodeCounters.get(nodeName) || 0;
+    this._nodeCounters.set(nodeName, counter + 1);
+    return `${nodeName}_${counter}`;
+  }
+
   set(node) {
-    const id = `${node.nodeName.toLowerCase()}_${++this.idCnt}`;
+    if (this._nodeToId.has(node)) {
+      return this._nodeToId.get(node);
+    }
+    const id = this.generateId(node);
     this._idToRef.set(id, new WeakRef(node));
     this._nodeToId.set(node, id);
     return id;
