@@ -6,7 +6,7 @@ export class BiWeakNodeMap {
   }
 
   set(node) {
-    const id = `${node.nodeName.toLowerCase()}-${++this.idCnt}`;
+    const id = `${node.nodeName.toLowerCase()}_${++this.idCnt}`;
     this._idToRef.set(id, new WeakRef(node));
     this._nodeToId.set(node, id);
     return id;

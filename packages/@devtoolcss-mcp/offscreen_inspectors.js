@@ -84,8 +84,6 @@ const chromeDebugger = {
   },
 };
 
-const biMap = new BiWeakNodeMap();
-
 // inspector management per tab
 const inspectors = {};
 
@@ -100,17 +98,73 @@ async function getInspector(tabId) {
   return inspectors[tabId];
 }
 
+const biMap = new BiWeakNodeMap();
+
+// handling predefined nodes
+function getNode(uid, inspector) {
+  if (uid === "html") return inspector.querySelector("html");
+  return biMap.getNode(uid);
+}
+
+/**
+ * Evaluates a DOM expression by replacing UID variables with actual nodes
+ * Examples:
+ *   "html" -> predefined html element (querySelector('html'))
+ *   "html.querySelectorAll('div.container')[0]" -> query from html
+ *   "uid_1.querySelectorAll('span')[0]" -> query from node
+ *   "uid_1.parentNode" -> get parent node
+ *   "uid_1.children[1]" -> get second child
+ *
+ * @param {Inspector} inspector - The inspector instance
+ * @param {string} expression - DOM expression to evaluate
+ * @returns {Promise<{uids: string[]} | {error: string}>}
+ */
+async function evaluateNodeExpression(inspector, expression) {
+  expression = expression.trim();
+  const targetNodeName = expression.split(".")[0];
+  const targetNode = getNode(targetNodeName, inspector);
+  if (!targetNode) {
+    return { error: `Target node '${targetNodeName}' not found` };
+  }
+
+  const remainingExpression = expression.slice(targetNodeName.length);
+  // TODO: validate remainingExpression to ensure safety
+
+  try {
+    let result = eval(`
+        targetNode${remainingExpression};
+    `);
+
+    // Normalize result to array
+    let nodes;
+    if (result === null || result === undefined) {
+      nodes = [];
+    } else if (Array.isArray(result)) {
+      nodes = result;
+    } else {
+      nodes = [result];
+    }
+
+    const uids = nodes.map((node) => biMap.set(node));
+    return { uids };
+  } catch (error) {
+    return { error: `Failed to evaluate expression: ${error.message}` };
+  }
+}
+
 async function serveRequest(request) {
   const inspector = await getInspector(request.tabId);
   switch (request.tool) {
-    case "querySelectorAll": {
-      const nodes = await inspector.querySelectorAll(request.selector);
-      const uids = nodes.map((node) => biMap.set(node));
-      return { uids: uids };
+    case "getNodes": {
+      // Unified node retrieval using DOM expression syntax
+      if (!request.expression) {
+        return { error: "Missing 'expression' parameter" };
+      }
+      return await evaluateNodeExpression(inspector, request.expression);
     }
 
     case "getMatchedStyles": {
-      const node = biMap.getNode(request.uid);
+      const node = getNode(request.uid, inspector);
       if (!node) {
         return { error: "Node not found for uid: " + request.uid };
       }
@@ -131,7 +185,7 @@ async function serveRequest(request) {
     }
 
     case "getComputedStyle": {
-      const node = biMap.getNode(request.uid);
+      const node = getNode(request.uid, inspector);
       if (!node) {
         return { error: "Node not found for uid: " + request.uid };
       }
@@ -152,56 +206,8 @@ async function serveRequest(request) {
       return { styles };
     }
 
-    case "querySelectorAll_handle": {
-      const node = biMap.getNode(request.uid);
-      if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
-      }
-      const nodes = await node.querySelectorAll(request.selector);
-      const uids = nodes.map((n) => biMap.set(n));
-      return { uids };
-    }
-
-    case "parent": {
-      const node = biMap.getNode(request.uid);
-      if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
-      }
-      const parent = node.parentNode;
-      if (!parent) {
-        return { uid: null };
-      }
-      const uid = biMap.set(parent);
-      return { uid };
-    }
-
-    case "children": {
-      const node = biMap.getNode(request.uid);
-      if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
-      }
-      const children = node.children || node.childNodes;
-      const uids = children.map((child) => biMap.set(child));
-      return { uids };
-    }
-
-    case "attributes": {
-      const node = biMap.getNode(request.uid);
-      if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
-      }
-      const attrs = {};
-      if (node.attributes) {
-        for (let i = 0; i < node.attributes.length; i++) {
-          const attr = node.attributes[i];
-          attrs[attr.name] = attr.value;
-        }
-      }
-      return { attributes: attrs };
-    }
-
     case "outerHTML": {
-      const node = biMap.getNode(request.uid);
+      const node = getNode(request.uid, inspector);
       if (!node) {
         return { error: "Node not found for uid: " + request.uid };
       } else if (!node.tracked) {
