@@ -11,7 +11,7 @@
     "sync:manifest": "node scripts/sync-manifest.js"
   },
   "dependencies": {
-    "chrome-inspector": "link:/home/bill/chrome-inspector/",
+    "chrome-inspector": "^1.0.4",
     "ws": "^8.18.3"
   },
   "devDependencies": {
