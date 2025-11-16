@@ -103,7 +103,7 @@ const biMap = new BiWeakNodeMap();
 
 // handling predefined nodes
 function getNode(uid, inspector) {
-  if (uid === "html") return inspector.querySelector("html");
+  if (uid === "document") return inspector.document;
   return biMap.getNode(uid);
 }
 
