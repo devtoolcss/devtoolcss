@@ -6,6 +6,7 @@ import {
   filterMatchedStyles,
   simplifyMatchedStyles,
 } from "./styleUtils";
+import { evaluateDOMExpression } from "./DOMExpression";
 
 // Create a chromeDebugger wrapper that works in offscreen context
 const chromeDebugger = {
@@ -119,38 +120,6 @@ function getNode(uid, inspector) {
  * @param {string} expression - DOM expression to evaluate
  * @returns {Promise<{uids: string[]} | {error: string}>}
  */
-async function evaluateNodeExpression(inspector, expression) {
-  expression = expression.trim();
-  const targetNodeName = expression.split(".")[0];
-  const targetNode = getNode(targetNodeName, inspector);
-  if (!targetNode) {
-    return { error: `Target node '${targetNodeName}' not found` };
-  }
-
-  const remainingExpression = expression.slice(targetNodeName.length);
-  // TODO: validate remainingExpression to ensure safety
-
-  try {
-    let result = eval(`
-        targetNode${remainingExpression};
-    `);
-
-    // Normalize result to array
-    let nodes;
-    if (result === null || result === undefined) {
-      nodes = [];
-    } else if (Array.isArray(result)) {
-      nodes = result;
-    } else {
-      nodes = [result];
-    }
-
-    const uids = nodes.map((node) => biMap.set(node));
-    return { uids };
-  } catch (error) {
-    return { error: `Failed to evaluate expression: ${error.message}` };
-  }
-}
 
 async function serveRequest(request) {
   const inspector = await getInspector(request.tabId);
@@ -160,7 +129,12 @@ async function serveRequest(request) {
       if (!request.expression) {
         return { error: "Missing 'expression' parameter" };
       }
-      return await evaluateNodeExpression(inspector, request.expression);
+      return await evaluateDOMExpression(
+        request.expression,
+        inspector,
+        getNode,
+        biMap.set.bind(biMap),
+      );
     }
 
     case "getMatchedStyles": {
