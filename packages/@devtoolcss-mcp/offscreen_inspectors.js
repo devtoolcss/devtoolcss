@@ -1,11 +1,7 @@
 import { Inspector } from "chrome-inspector";
 import { BiWeakNodeMap } from "./BiWeakNodeMap";
 import { truncateHTML } from "./htmlUtils";
-import {
-  filterComputedStyle,
-  filterMatchedStyles,
-  simplifyMatchedStyles,
-} from "./styleUtils";
+import { filterMatchedStyles, toStyleSheetText } from "./styleUtils";
 import { evaluateDOMExpression } from "./DOMExpression";
 
 // Create a chromeDebugger wrapper that works in offscreen context
@@ -104,6 +100,7 @@ const biMap = new BiWeakNodeMap();
 // handling predefined nodes
 function getNode(uid, inspector) {
   if (uid === "document") return inspector.document;
+  if (uid === "$0") return inspector.$0;
   return biMap.getNode(uid);
 }
 
@@ -138,24 +135,37 @@ async function serveRequest(request) {
     }
 
     case "getMatchedStyles": {
-      const node = getNode(request.uid, inspector);
+      const {
+        uid,
+        removeUnusedVar = true,
+        appliedOnly = false,
+        filter,
+      } = request;
+      const node = getNode(uid, inspector);
       if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
+        return { error: `Node not found for uid: ${uid}` };
       }
-      let styles = await node.getMatchedStyles(request.options || {});
-      console.log("serveRequest - getMatchedStyles styles:", styles);
+      const options = {
+        parseOptions: { removeUnusedVar },
+      };
+      let styles = await node.getMatchedStyles(options);
 
       // Apply filters to reduce response size
-      if (request.filter) {
-        styles = filterMatchedStyles(styles, request.filter);
+      if (filter) {
+        styles = filterMatchedStyles(styles, filter);
       }
+      const toStyleSheetOptions = {
+        applied: appliedOnly ? false : true,
+        matchedSelectors: true,
+      };
+      const styleSheetText = toStyleSheetText(
+        styles,
+        node,
+        toStyleSheetOptions,
+      );
+      console.log("serveRequest - getMatchedStyles styles:", styleSheetText);
 
-      // Optionally simplify the response
-      if (request.simplify) {
-        styles = simplifyMatchedStyles(styles);
-      }
-
-      return { styles };
+      return { styles: styleSheetText };
     }
 
     case "getComputedStyle": {
@@ -164,39 +174,38 @@ async function serveRequest(request) {
         return { error: "Node not found for uid: " + request.uid };
       }
 
-      let styles = await node.getComputedStyle(request.options || {});
-      console.log("serveRequest - getComputedStyle styles:", styles);
-
-      // Apply filters to reduce response size
-      if (request.filter) {
-        styles = filterComputedStyle(styles, request.filter);
-      } else if (request.properties) {
-        // Backward compatibility: support direct properties array
-        styles = filterComputedStyle(styles, {
-          properties: request.properties,
-        });
-      }
-
-      return { styles };
+      const styles = await node.getComputedStyle();
+      const filtered = {};
+      request.properties.map((prop) => {
+        filtered[prop] = styles[prop];
+      });
+      console.log("serveRequest - getComputedStyle styles:", filtered);
+      return { styles: filtered };
     }
 
     case "outerHTML": {
-      const node = getNode(request.uid, inspector);
+      // some safe defaults
+      const {
+        uid,
+        maxDepth = 3,
+        maxLineLength = 1000,
+        maxChars = 500000,
+      } = request;
+      const node = getNode(uid, inspector);
       if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
+        return { error: `Node not found for uid: ${uid}` };
       } else if (!node.tracked) {
         return {
-          error: "Node is no longer existed for uid: " + request.uid,
+          error: `Node is no longer existed for uid: ${uid}`,
         };
       }
       // Apply depth and line length controls if provided
-      html = truncateHTML(
+      const html = truncateHTML(
         node._docNode,
-        request.maxDepth,
-        request.maxLineLength,
-        request.maxChars,
+        maxDepth,
+        maxLineLength,
+        maxChars,
       );
-
       return { outerHTML: html };
     }
 

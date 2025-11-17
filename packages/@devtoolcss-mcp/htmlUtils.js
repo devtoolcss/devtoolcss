@@ -85,7 +85,8 @@ function truncateByDepth(node, maxDepth) {
     if (clone.nodeType === Node.ELEMENT_NODE) {
       const summary = summarizeRemainingStructure(node);
       const summaryText = `... ${summary.elements} more element(s), ${summary.textNodes} text node(s), max depth +${summary.totalDepth}`;
-      clone.appendChild(document.createComment(summaryText));
+      if (summary.totalDepth > 0)
+        clone.appendChild(document.createComment(summaryText));
     }
     return clone;
   }

@@ -1,157 +1,157 @@
 /**
- * Filters computed styles based on provided property names or patterns
- * @param {Object} styles - The computed styles object
- * @param {Object} filter - Filter options
- * @param {string[]} [filter.properties] - Specific property names to include
- * @param {string[]} [filter.patterns] - Regex patterns to match property names
- * @returns {Object} Filtered styles
- */
-export function filterComputedStyle(styles, filter = {}) {
-  if (!filter || (!filter.properties && !filter.patterns && !filter.exclude)) {
-    return styles;
-  }
-
-  const result = {};
-
-  // If specific properties are requested, only include those
-  if (filter.properties && Array.isArray(filter.properties)) {
-    for (const prop of filter.properties) {
-      if (prop in styles) {
-        result[prop] = styles[prop];
-      }
-    }
-    return result;
-  }
-
-  // If patterns are provided, match property names
-  let matchedProps = new Set();
-  if (filter.patterns && Array.isArray(filter.patterns)) {
-    const regexes = filter.patterns.map((pattern) => new RegExp(pattern));
-    for (const prop in styles) {
-      for (const regex of regexes) {
-        if (regex.test(prop)) {
-          matchedProps.add(prop);
-          break;
-        }
-      }
-    }
-  } else {
-    // No patterns, include all
-    matchedProps = new Set(Object.keys(styles));
-  }
-
-  return result;
-}
-
-/**
  * Filters matched styles response to reduce size
- * @param {Object} matchedStyles - The matched styles object from chrome-inspector
+ * @param {Object} styles - The matched styles object from chrome-inspector
  * @param {Object} filter - Filter options
- * @param {string[]} [filter.field] - Array of field types to include (e.g., ['inlineStyle', 'matchedCSSRules', 'inherited', 'pseudoElements'])
- * @param {string[]} [filter.selectors] - Regex pattern for selector matching
+ * @param {string[]} [filter.selectors] - Regex pattern for selector matching in matched and pseudoElements
  * @param {string[]} [filter.properties] - Properties to include rules with matching properties
+ * @param {boolean} [filter.appliedOnly] - If true, only include applied properties
  * @returns {Object} Filtered matched styles
  */
-export function filterMatchedStyles(matchedStyles, filter = {}) {
-  if (!filter || Object.keys(filter).length === 0) {
-    return matchedStyles;
-  }
-
+export function filterMatchedStyles(styles, filter) {
   // Compile regex patterns if provided
-  const selectorRegexes = filter.selectors
-    ? filter.selectors.map((pattern) => new RegExp(pattern))
-    : null;
-
-  if (filter.field) {
-    const fieldsToInclude = new Set(filter.field);
-    for (const key of Object.keys(matchedStyles)) {
-      if (!fieldsToInclude.has(key)) {
-        delete matchedStyles[key];
-      }
-    }
-  }
-
-  const filterRuleBySelectors = (rules) => {
-    return rules.filter((rule) => {
-      return selectorRegexes.some((regex) =>
-        regex.test(rule.matchedSelectors.join(", ")),
-      );
-    });
-  };
 
   if (filter.selectors) {
-    if (matchedStyles.inherited) {
-      for (const inheritedItem of matchedStyles.inherited) {
-        inherited;
-      }
-    }
+    const selectorRegexes = filter.selectors
+      ? filter.selectors.map((pattern) => new RegExp(pattern))
+      : null;
+    const filterRulesBySelectors = (rules) => {
+      return rules.filter((rule) => {
+        return selectorRegexes.some((regex) =>
+          regex.test(rule.matchedSelectors.join(", ")),
+        );
+      });
+    };
+    styles.matchedCSSRules = filterRulesBySelectors(styles.matchedCSSRules);
+    styles.pseudoElements = filterRulesBySelectors(styles.pseudoElements);
   }
 
-  // TODO: fix logic
-
-  return result;
-}
-
-/**
- * Simplifies matched styles to a more readable format
- * @param {Object} matchedStyles - The matched styles object
- * @returns {Object} Simplified styles object
- */
-export function simplifyMatchedStyles(matchedStyles) {
-  const simplified = {
-    inline: {},
-    matched: [],
-    inherited: [],
+  const filterAllProperties = (styles, filter) => {
+    const filterProperties = (properties) => {
+      return properties.filter(filter);
+    };
+    for (const parentCSS of styles.inherited) {
+      parentCSS.inline = filterProperties(parentCSS.inline);
+      for (const rule of parentCSS.matched) {
+        rule.properties = filterProperties(rule.properties);
+      }
+    }
+    styles.attributes = filterProperties(styles.attributes);
+    for (const rule of styles.matchedCSSRules) {
+      rule.properties = filterProperties(rule.properties);
+    }
+    for (const rule of styles.pseudoElements) {
+      rule.properties = filterProperties(rule.properties);
+    }
+    styles.inline = filterProperties(styles.inline);
   };
 
-  // Extract inline styles
-  if (matchedStyles.inlineStyle?.cssProperties) {
-    for (const prop of matchedStyles.inlineStyle.cssProperties) {
-      simplified.inline[prop.name] = prop.value;
-    }
+  if (filter.properties) {
+    const propertiesSet = new Set(filter.properties);
+    const filter = (decl) => propertiesSet.has(decl.name);
+    filterAllProperties(styles, filter);
   }
 
-  // Extract matched rules
-  if (matchedStyles.matchedCSSRules) {
-    for (const rule of matchedStyles.matchedCSSRules) {
-      const ruleObj = {
-        selector: rule.rule?.selectorList?.text || rule.rule?.selectorText,
-        properties: {},
-      };
-
-      if (rule.rule?.style?.cssProperties) {
-        for (const prop of rule.rule.style.cssProperties) {
-          ruleObj.properties[prop.name] = prop.value;
-        }
-      }
-
-      simplified.matched.push(ruleObj);
-    }
+  if (filter.appliedOnly) {
+    const filter = (decl) => decl.applied === true;
+    filterAllProperties(styles, filter);
   }
 
-  // Extract inherited styles
-  if (matchedStyles.inherited) {
-    for (const inheritedItem of matchedStyles.inherited) {
-      const inheritedObj = {
-        from: inheritedItem.inlineStyle ? "inline" : "rules",
-        properties: {},
-      };
+  return styles;
+}
 
-      if (inheritedItem.matchedCSSRules) {
-        for (const rule of inheritedItem.matchedCSSRules) {
-          if (rule.rule?.style?.cssProperties) {
-            for (const prop of rule.rule.style.cssProperties) {
-              inheritedObj.properties[prop.name] = prop.value;
-            }
-          }
-        }
+export function toStyleSheetText(styles, element, commentConfig = {}) {
+  let cssText = "";
+
+  const toCSSRuleText = (rule) => {
+    const allSelectorsStr = rule.allSelectors.join(", ");
+    const matchedSelectorsStr = rule.matchedSelectors.join(", ");
+    let css = "";
+    // TODO: inspector need CSS.styleSheetAdded event to get origin info
+    //if (commentConfig.origin && rule.origin) {
+    //  css += `/* Origin: ${rule.origin} */\n`;
+    //}
+    if (
+      commentConfig.matchedSelectors &&
+      matchedSelectorsStr !== allSelectorsStr
+    ) {
+      css += `/* Matched: ${matchedSelectorsStr} */\n`;
+    }
+    css += `${allSelectorsStr} {\n`;
+    for (const prop of rule.properties) {
+      css += `  ${prop.name}: ${prop.value};`;
+      if (commentConfig.applied && prop.applied) {
+        css += ` /* applied */`;
       }
+      css += "\n";
+    }
+    css += `}\n\n`;
+    return css;
+  };
 
-      if (Object.keys(inheritedObj.properties).length > 0) {
-        simplified.inherited.push(inheritedObj);
+  // inline
+  if (styles.inline.length > 0) {
+    cssText += toCSSRuleText({
+      allSelectors: ["element.style"],
+      matchedSelectors: ["element.style"],
+      properties: styles.inline,
+    });
+  }
+
+  // matched & pseudoElements
+  const allMatchedRules = [
+    ...styles.matched,
+    ...styles.pseudoElements,
+  ].reverse();
+
+  for (const rule of allMatchedRules) {
+    if (rule.properties.length > 0) cssText += toCSSRuleText(rule);
+  }
+
+  // attributes
+  if (styles.attributes.length > 0) {
+    const selectorPlaceholder = `${element.nodeName.toLowerCase()}[Attributes Style]`;
+    cssText += toCSSRuleText({
+      allSelectors: [selectorPlaceholder],
+      matchedSelectors: [selectorPlaceholder],
+      properties: styles.attributes,
+    });
+  }
+
+  for (const parentCSS of styles.inherited) {
+    const { inline, matched, distance } = parentCSS;
+    if (
+      inline.length === 0 &&
+      matched.every((rule) => rule.properties.length === 0)
+    )
+      continue;
+
+    const getParentSelector = (element, distance) => {
+      let parentNode = element;
+      for (let i = 0; i < distance; i++) {
+        parentNode = parentNode.parentNode;
+      }
+      let parentSelector = parentNode.nodeName.toLowerCase();
+      if (parentNode.id) {
+        parentSelector += `#${parentNode.id}`;
+      } else if (parentNode.classList && parentNode.classList.length > 0) {
+        parentSelector += `.${[...parentNode.classList].slice(0, 3).join(".")}`;
+      }
+      return parentSelector;
+    };
+    cssText += `/* Inherited from ${getParentSelector(element, distance)} */\n`;
+
+    if (inline.length > 0) {
+      cssText += toCSSRuleText({
+        allSelectors: ["style attribute"],
+        matchedSelectors: ["style attribute"],
+        properties: inline,
+      });
+    }
+    for (const rule of matched) {
+      if (rule.properties.length > 0) {
+        cssText += toCSSRuleText(rule);
       }
     }
   }
-
-  return simplified;
+  return cssText;
 }
