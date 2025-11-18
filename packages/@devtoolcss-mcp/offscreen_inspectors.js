@@ -12,7 +12,8 @@ const chromeDebugger = {
   async attach(target, version, callback = () => {}) {
     chrome.runtime.sendMessage(
       {
-        type: "DEBUGGER_ATTACH",
+        receiver: "background",
+        event: "DEBUGGER_ATTACH",
         target,
       },
       (response) => {
@@ -27,7 +28,8 @@ const chromeDebugger = {
   async detach(target, callback = () => {}) {
     chrome.runtime.sendMessage(
       {
-        type: "DEBUGGER_DETACH",
+        receiver: "background",
+        event: "DEBUGGER_DETACH",
         target,
       },
       (response) => {
@@ -53,7 +55,8 @@ const chromeDebugger = {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(
         {
-          type: "DEBUGGER_SEND_COMMAND",
+          receiver: "background",
+          event: "DEBUGGER_SEND_COMMAND",
           target,
           method,
           params,
@@ -84,12 +87,16 @@ const chromeDebugger = {
 // inspector management per tab
 const inspectors = {};
 
+// record $0 xpaths for tabs not having inspector yet
+const tab$0Map = new Map();
+
 async function getInspector(tabId) {
   if (!inspectors[tabId]) {
     await chromeDebugger.attach({ tabId }, "1.3");
     inspectors[tabId] = await Inspector.fromChromeDebugger(
       chromeDebugger,
       tabId,
+      { $0XPath: tab$0Map.get(tabId) },
     );
   }
   return inspectors[tabId];
@@ -119,6 +126,7 @@ function getNode(uid, inspector) {
  */
 
 async function serveRequest(request) {
+  console.log("serveRequest - request:", request);
   const inspector = await getInspector(request.tabId);
   switch (request.tool) {
     case "getNodes": {
@@ -216,11 +224,15 @@ async function serveRequest(request) {
 
 // listener must be sync, return true to indicate async response
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.receiver !== "offscreen") return;
+
   switch (msg.event) {
     case "TAB_CLOSED":
-      chromeDebugger.detach({ tabId: msg.tabId });
-      delete inspectors[msg.tabId];
-      biMap.cleanUp();
+      if (inspectors[msg.tabId]) {
+        chromeDebugger.detach({ tabId: msg.tabId });
+        delete inspectors[msg.tabId];
+        biMap.cleanUp();
+      }
       break;
 
     case "DEBUGGER_EVENT":
@@ -228,7 +240,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       chromeDebugger._dispatchEvent(source, method, params);
       break;
 
-    default: // request
+    case "SET_INSPECTED_TAB_$0":
+      tab$0Map.set(msg.tabId, msg.xpath);
+      break;
+
+    case "REQUEST":
       serveRequest(msg).then(sendResponse);
       return true; // Keep the message channel open for async response
   }

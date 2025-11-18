@@ -3,7 +3,12 @@ import { build } from "esbuild";
 const isProd = process.env.NODE_ENV === "production";
 
 const commonOptions = {
-  entryPoints: ["popup.js", "background.js", "offscreen_inspectors.js"],
+  entryPoints: [
+    "popup.js",
+    "background.js",
+    "offscreen_inspectors.js",
+    "devtools.js",
+  ],
   bundle: true,
   outdir: "dist",
   format: "esm",

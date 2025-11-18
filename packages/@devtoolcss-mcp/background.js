@@ -17,9 +17,21 @@ let settings = {
   pollingInterval: 2000, // 2 seconds
 };
 
+let inspectedTabId = null;
+
 async function getActiveTabId() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const activeTab = tabs[0];
+  if (!activeTab) {
+    if (!inspectedTabId)
+      throw new Error(
+        "No active tab found. Click an element if you are in DevTools.",
+      );
+    console.log(inspectedTabId);
+    return inspectedTabId;
+  } else if (activeTab.url && activeTab.url.startsWith("chrome://")) {
+    throw new Error("Cannot inspect chrome:// pages");
+  }
   return activeTab.id;
 }
 
@@ -27,6 +39,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   console.log(`Tab ${tabId} closed`);
   // Clean up any resources related to this tab
   chrome.runtime.sendMessage({
+    receiver: "offscreen",
     event: "TAB_CLOSED",
     tabId: tabId,
   });
@@ -35,6 +48,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 chrome.debugger.onEvent.addListener((source, method, params) => {
   // Forward debugger events to offscreen inspector
   chrome.runtime.sendMessage({
+    receiver: "offscreen",
     event: "DEBUGGER_EVENT",
     source,
     method,
@@ -44,7 +58,9 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
 
 // Handle debugger commands from offscreen
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  switch (msg.type) {
+  if (msg.receiver !== "background") return;
+
+  switch (msg.event) {
     case "DEBUGGER_SEND_COMMAND":
       try {
         chrome.debugger.sendCommand(
@@ -77,6 +93,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ error: error.message });
       }
       break;
+    case "SET_INSPECTED_TAB_ID":
+      inspectedTabId = msg.tabId;
+      break;
   }
   return true; // Keep the message channel open for async response
 });
@@ -85,6 +104,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function handleRequest(request) {
   const activeTabId = await getActiveTabId();
   const response = await chrome.runtime.sendMessage({
+    receiver: "offscreen",
+    event: "REQUEST",
     ...request,
     tabId: activeTabId,
   });
