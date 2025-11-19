@@ -86,7 +86,7 @@ export async function evaluateDOMExpression(
   const targetNodeName = expression.split(".")[0];
   const targetNode = getNode(targetNodeName, inspector);
   if (!targetNode) {
-    return { error: `Target node '${targetNodeName}' not found` };
+    throw new Error(`Target node '${targetNodeName}' not found`);
   }
 
   const remainingExpression = expression.slice(targetNodeName.length);
@@ -109,6 +109,6 @@ export async function evaluateDOMExpression(
     const uids = nodes.map((node) => setNode(node));
     return { uids };
   } catch (error) {
-    return { error: `Failed to evaluate expression: ${error.message}` };
+    throw new Error(`Failed to evaluate "${expression}": ${error.message}`);
   }
 }

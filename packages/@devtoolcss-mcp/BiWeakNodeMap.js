@@ -38,6 +38,7 @@ export class BiWeakNodeMap {
   }
 
   cleanUp() {
+    // FIXME: didn't really cleanup deleted inspector's nodes
     for (const [id, ref] of this._idToRef.entries()) {
       if (ref.deref() === undefined) {
         this._idToRef.delete(id);

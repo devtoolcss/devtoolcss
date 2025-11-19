@@ -125,14 +125,14 @@ function getNode(uid, inspector) {
  * @returns {Promise<{uids: string[]} | {error: string}>}
  */
 
-async function serveRequest(request) {
-  console.log("serveRequest - request:", request);
+async function processRequest(request) {
+  console.log("processRequest - request:", request);
   const inspector = await getInspector(request.tabId);
   switch (request.tool) {
     case "getNodes": {
       // Unified node retrieval using DOM expression syntax
       if (!request.expression) {
-        return { error: "Missing 'expression' parameter" };
+        throw new Error("Missing 'expression' parameter");
       }
       return await evaluateDOMExpression(
         request.expression,
@@ -151,7 +151,7 @@ async function serveRequest(request) {
       } = request;
       const node = getNode(uid, inspector);
       if (!node) {
-        return { error: `Node not found for uid: ${uid}` };
+        throw new Error(`Node not found for uid: ${uid}`);
       }
       const options = {
         parseOptions: { removeUnusedVar },
@@ -179,7 +179,7 @@ async function serveRequest(request) {
     case "getComputedStyle": {
       const node = getNode(request.uid, inspector);
       if (!node) {
-        return { error: "Node not found for uid: " + request.uid };
+        throw new Error("Node not found for uid: " + request.uid);
       }
 
       const styles = await node.getComputedStyle();
@@ -191,7 +191,7 @@ async function serveRequest(request) {
       return { styles: filtered };
     }
 
-    case "outerHTML": {
+    case "getOuterHTML": {
       // some safe defaults
       const {
         uid,
@@ -201,11 +201,9 @@ async function serveRequest(request) {
       } = request;
       const node = getNode(uid, inspector);
       if (!node) {
-        return { error: `Node not found for uid: ${uid}` };
+        throw new Error(`Node not found for uid: ${uid}`);
       } else if (!node.tracked) {
-        return {
-          error: `Node is no longer existed for uid: ${uid}`,
-        };
+        throw new Error(`Node is no longer existed for uid: ${uid}`);
       }
       // Apply depth and line length controls if provided
       const html = truncateHTML(
@@ -214,11 +212,12 @@ async function serveRequest(request) {
         maxLineLength,
         maxChars,
       );
+      console.log("serveRequest - getOuterHTML html:", html);
       return { outerHTML: html };
     }
 
     default:
-      return { error: "Unknown tool: " + request.tool };
+      throw new Error("Unknown tool: " + request.tool);
   }
 }
 
@@ -255,7 +254,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case "REQUEST":
-      serveRequest(msg).then(sendResponse);
+      processRequest(msg.request)
+        .then(sendResponse)
+        .catch((error) => {
+          sendResponse({ error: error.message || String(error) });
+        });
       return true; // Keep the message channel open for async response
   }
 });

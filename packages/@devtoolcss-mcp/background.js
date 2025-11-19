@@ -25,12 +25,11 @@ async function getActiveTabId() {
   if (!activeTab) {
     if (!inspectedTabId)
       throw new Error(
-        "No active tab found. Click an element if you are in DevTools.",
+        "No active tab found. Tell user to click an element if in DevTools.",
       );
-    console.log(inspectedTabId);
     return inspectedTabId;
   } else if (activeTab.url && activeTab.url.startsWith("chrome://")) {
-    throw new Error("Cannot inspect chrome:// pages");
+    throw new Error("Cannot access a chrome:// URL");
   }
   return activeTab.id;
 }
@@ -71,36 +70,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   switch (msg.event) {
     case "DEBUGGER_SEND_COMMAND":
-      try {
-        chrome.debugger.sendCommand(
-          msg.target,
-          msg.method,
-          msg.params,
-          (result) => {
-            sendResponse({ result });
-          },
-        );
-      } catch (error) {
-        sendResponse({ error: error.message });
-      }
+      chrome.debugger
+        .sendCommand(msg.target, msg.method, msg.params)
+        .then((result) => sendResponse({ result }))
+        .catch((error) => sendResponse({ error: error.message }));
       break;
     case "DEBUGGER_ATTACH":
-      try {
-        chrome.debugger.attach(msg.target, "1.3", () => {
-          sendResponse({ success: true });
-        });
-      } catch (error) {
-        sendResponse({ error: error.message });
-      }
+      chrome.debugger
+        .attach(msg.target, "1.3")
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ error: error.message }));
       break;
     case "DEBUGGER_DETACH":
-      try {
-        chrome.debugger.detach(msg.target, () => {
-          sendResponse({ success: true });
-        });
-      } catch (error) {
-        sendResponse({ error: error.message });
-      }
+      chrome.debugger
+        .detach(msg.target)
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ error: error.message }));
       break;
     case "SET_INSPECTED_TAB_ID":
       inspectedTabId = msg.tabId;
@@ -110,15 +95,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Main serving logic
-async function handleRequest(request) {
-  const activeTabId = await getActiveTabId();
+async function serveRequest(request) {
+  if (request.tabId === undefined) {
+    request.tabId = await getActiveTabId();
+  }
   const response = await chrome.runtime.sendMessage({
     receiver: "offscreen",
     event: "REQUEST",
-    ...request,
-    tabId: activeTabId,
+    request,
   });
-  console.log("response received:", response);
   return response;
 }
 
@@ -187,21 +172,26 @@ function connectWebSocket() {
 
   ws.onmessage = async (event) => {
     console.log("[WS] Request received:", event.data);
+    let req;
     try {
-      const req = JSON.parse(event.data);
-      const response = await handleRequest(req);
+      req = JSON.parse(event.data);
+    } catch (e) {
+      console.error(`[WS] Failed to parse message ${event.data}:`, e);
+      ws.send(JSON.stringify({ error: e.message || String(e) }));
+      return;
+    }
+
+    try {
+      const response = await serveRequest(req);
       console.log("response:", response);
       ws.send(JSON.stringify({ id: req.id, ...response }));
     } catch (e) {
-      console.error("[WS] Failed to parse message:", e);
+      console.error(`[WS] Failed to serve message ${event.data}:`, e);
+      ws.send(JSON.stringify({ id: req.id, error: e.message || String(e) }));
     }
   };
 
   ws.onerror = (event) => {
-    if (ws.readyState === WebSocket.CLOSED) {
-      // Connection lost, will be handled by onclose
-      return;
-    }
     console.error("[WS] Error occurred:", event);
   };
 
