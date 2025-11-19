@@ -5,40 +5,45 @@ import { filterMatchedStyles, toStyleSheetText } from "./styleUtils";
 import { evaluateDOMExpression } from "./DOMExpression";
 
 // Create a chromeDebugger wrapper that works in offscreen context
+async function sendDebuggerMessage(payload) {
+  const response = await chrome.runtime.sendMessage({
+    receiver: "background",
+    ...payload,
+  });
+
+  if (response?.error) {
+    throw new Error(response.error);
+  } else {
+    return response?.result;
+  }
+}
+
 const chromeDebugger = {
   // Event listeners storage
   _listeners: new Set(),
 
-  async attach(target, version, callback = () => {}) {
-    chrome.runtime.sendMessage(
-      {
-        receiver: "background",
-        event: "DEBUGGER_ATTACH",
-        target,
-      },
-      (response) => {
-        if (response?.error) {
-          throw new Error(response.error);
-        }
-        callback();
-      },
-    );
+  async attach(target, version) {
+    return sendDebuggerMessage({
+      event: "DEBUGGER_ATTACH",
+      target,
+    });
   },
 
-  async detach(target, callback = () => {}) {
-    chrome.runtime.sendMessage(
-      {
-        receiver: "background",
-        event: "DEBUGGER_DETACH",
-        target,
-      },
-      (response) => {
-        if (response?.error) {
-          throw new Error(response.error);
-        }
-        callback();
-      },
-    );
+  async detach(target) {
+    return sendDebuggerMessage({
+      event: "DEBUGGER_DETACH",
+      target,
+    });
+  },
+
+  // Send command to the actual chrome.debugger in background.js
+  async sendCommand(target, method, params) {
+    return sendDebuggerMessage({
+      event: "DEBUGGER_SEND_COMMAND",
+      target,
+      method,
+      params,
+    });
   },
 
   onEvent: {
@@ -48,28 +53,6 @@ const chromeDebugger = {
     removeListener(callback) {
       chromeDebugger._listeners.delete(callback);
     },
-  },
-
-  // Send command to the actual chrome.debugger in background.js
-  async sendCommand(target, method, params) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        {
-          receiver: "background",
-          event: "DEBUGGER_SEND_COMMAND",
-          target,
-          method,
-          params,
-        },
-        (response) => {
-          if (response?.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response?.result);
-          }
-        },
-      );
-    });
   },
 
   // Internal method to dispatch events to listeners

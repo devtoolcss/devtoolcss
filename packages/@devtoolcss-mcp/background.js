@@ -78,13 +78,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case "DEBUGGER_ATTACH":
       chrome.debugger
         .attach(msg.target, "1.3")
-        .then(() => sendResponse({ success: true }))
+        .then((result) => sendResponse({ result }))
         .catch((error) => sendResponse({ error: error.message }));
       break;
     case "DEBUGGER_DETACH":
       chrome.debugger
         .detach(msg.target)
-        .then(() => sendResponse({ success: true }))
+        .then((result) => sendResponse({ result }))
         .catch((error) => sendResponse({ error: error.message }));
       break;
     case "SET_INSPECTED_TAB_ID":
