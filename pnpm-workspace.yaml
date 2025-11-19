@@ -1,5 +1,5 @@
 packages:
-  - packages/@devtoolcss-mcp
-    
+  - packages/*
+
 onlyBuiltDependencies:
   - esbuild

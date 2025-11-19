@@ -37,8 +37,11 @@ importers:
   packages/@devtoolcss-mcp:
     dependencies:
       chrome-inspector:
-        specifier: link:/home/bill/chrome-inspector/
-        version: link:../../../chrome-inspector
+        specifier: ^1.0.6
+        version: 1.0.6
+      js-beautify:
+        specifier: ^1.15.4
+        version: 1.15.4
       ws:
         specifier: ^8.18.3
         version: 8.18.3
@@ -52,6 +55,9 @@ importers:
       esbuild:
         specifier: ^0.27.0
         version: 0.27.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/@devtoolcss-parser:
     devDependencies:
@@ -614,6 +620,9 @@ packages:
 
   chrome-inspector@1.0.3:
     resolution: {integrity: sha512-rF2YrgaCzZNOimM91ESna+4+dTHBMJlDViDUvkwVHsEOxZzrPoeZ4mldP5zOZYFhWpgDrDnIMUlycEKsbq56Ag==}
+
+  chrome-inspector@1.0.6:
+    resolution: {integrity: sha512-5OhOccte20uGlI2WHqhtfOq6/NX3wTCmogfjUKqqfpLu6Ikp+0cjdfSmjibPmqYOW10BsUAQiQv8ACna+jfJOw==}
 
   chrome-launcher@1.2.1:
     resolution: {integrity: sha512-qmFR5PLMzHyuNJHwOloHPAHhbaNglkfeV/xDtt5b7xiFFyU1I+AZZX0PYseMuhenJSSirgxELYIbswcoc+5H4A==}
@@ -1522,6 +1531,16 @@ snapshots:
       readdirp: 4.1.2
 
   chrome-inspector@1.0.3:
+    dependencies:
+      '@devtoolcss/parser': 1.0.1
+      jsdom: 27.1.0
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - supports-color
+      - utf-8-validate
+
+  chrome-inspector@1.0.6:
     dependencies:
       '@devtoolcss/parser': 1.0.1
       jsdom: 27.1.0
