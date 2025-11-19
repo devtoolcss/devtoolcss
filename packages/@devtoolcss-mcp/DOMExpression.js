@@ -79,12 +79,11 @@ function evalMethods(target, expr) {
 export async function evaluateDOMExpression(
   expression,
   inspector,
-  getNode,
-  setNode,
+  nodeManager,
 ) {
   expression = expression.trim();
   const targetNodeName = expression.split(".")[0];
-  const targetNode = getNode(targetNodeName, inspector);
+  const targetNode = nodeManager.getNode(targetNodeName, inspector);
   if (!targetNode) {
     throw new Error(`Target node '${targetNodeName}' not found`);
   }
@@ -106,7 +105,7 @@ export async function evaluateDOMExpression(
       nodes = [result];
     }
 
-    const uids = nodes.map((node) => setNode(node));
+    const uids = nodes.map((node) => nodeManager.setNode(node));
     return { uids };
   } catch (error) {
     throw new Error(`Failed to evaluate "${expression}": ${error.message}`);

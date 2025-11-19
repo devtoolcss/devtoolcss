@@ -212,7 +212,7 @@ function connectWebSocket() {
       console.log("response:", response);
       ws.send(JSON.stringify({ id: req.id, ...response }));
     } catch (e) {
-      console.error(`[WS] Failed to serve message ${event.data}:`, e);
+      console.log(`[WS] Failed to serve message ${event.data}:`, e);
       ws.send(JSON.stringify({ id: req.id, error: e.message || String(e) }));
     }
   };

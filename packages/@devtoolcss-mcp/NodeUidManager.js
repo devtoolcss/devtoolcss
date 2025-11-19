@@ -1,4 +1,5 @@
-export class BiWeakNodeMap {
+// generate and record uids for node.
+export class NodeUidManager {
   constructor() {
     this._nodeCounters = new Map(); // nodeName -> counter
     this._idToRef = new Map(); // id -> WeakRef(node)
@@ -12,7 +13,7 @@ export class BiWeakNodeMap {
     return `${nodeName}_${counter}`;
   }
 
-  set(node) {
+  setNode(node) {
     if (this._nodeToId.has(node)) {
       return this._nodeToId.get(node);
     }
@@ -22,19 +23,20 @@ export class BiWeakNodeMap {
     return id;
   }
 
-  getNode(id) {
-    const ref = this._idToRef.get(id);
+  getNode(uid, inspector) {
+    // predefined
+    if (uid === "document") return inspector.document;
+    if (uid === "$0") return inspector.$0;
+
+    // from map
+    const ref = this._idToRef.get(uid);
     if (!ref) return undefined;
     const node = ref.deref();
     if (!node) {
       // Node GC'd, clean up stale entry
-      this._idToRef.delete(id);
+      this._idToRef.delete(uid);
     }
     return node;
-  }
-
-  getId(node) {
-    return this._nodeToId.get(node);
   }
 
   cleanUp() {
