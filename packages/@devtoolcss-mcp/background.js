@@ -56,6 +56,15 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   });
 });
 
+chrome.debugger.onDetach.addListener((source, reason) => {
+  chrome.runtime.sendMessage({
+    receiver: "offscreen",
+    event: "DEBUGGER_DETACHED",
+    tabId: source.tabId,
+    reason,
+  });
+});
+
 // Handle debugger commands from offscreen
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.receiver !== "background") return;

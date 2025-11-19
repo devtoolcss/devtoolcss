@@ -235,6 +235,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       break;
 
+    case "DEBUGGER_DETACHED":
+      if (inspectors[msg.tabId]) {
+        delete inspectors[msg.tabId];
+        biMap.cleanUp();
+        console.log(
+          `Inspector for tab ${msg.tabId} detached for ${msg.reason}`,
+        );
+      }
+      break;
+
     case "DEBUGGER_EVENT":
       const { source, method, params } = msg;
       chromeDebugger._dispatchEvent(source, method, params);
