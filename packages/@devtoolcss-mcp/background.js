@@ -94,8 +94,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // Keep the message channel open for async response
 });
 
+function formatRelativeTime(timestamp) {
+  const diffMs = Date.now() - timestamp;
+  const diffSec = Math.floor(diffMs / 1000);
+  const hr = Math.floor(diffSec / 3600);
+  const min = Math.floor((diffSec % 3600) / 60);
+  const sec = diffSec % 60;
+  let parts = [];
+  if (hr > 0) return `${hr}hr ago`;
+  if (min > 0) return `${min}min ago`;
+  return `${sec}sec ago`;
+}
+
 // Main serving logic
 async function serveRequest(request) {
+  if (request.tool === "getTabs") {
+    const tabs = await chrome.tabs.query({});
+    return {
+      tabs: tabs.map((tab) => ({
+        id: tab.id,
+        title: tab.title,
+        url: tab.url,
+        active: tab.active ? true : undefined,
+        lastAccessed: formatRelativeTime(tab.lastAccessed),
+      })),
+    };
+  }
+
+  // other inspector requests
   if (request.tabId === undefined) {
     request.tabId = await getActiveTabId();
   }
