@@ -1,5 +1,5 @@
 import type { Optimizer } from "./optimizer.js";
-import { parseCSSProperties } from "@devtoolcss/parser";
+import { ParsedCSS } from "@devtoolcss/parser";
 import type { ParsedCSSRules, CDPNodeWithId } from "../types.js";
 import type { InspectorElement } from "chrome-inspector";
 
@@ -8,8 +8,8 @@ import type { InspectorElement } from "chrome-inspector";
  */
 export class AriaExpandedOptimizer implements Optimizer {
   checkChildrenNodeIds: Set<number>;
-  childrenStyleBefore: Map<number, any[]>;
-  childrenStyleAfter: Map<number, any[]>;
+  childrenStyleBefore: Map<number, ParsedCSS[]>;
+  childrenStyleAfter: Map<number, ParsedCSS[]>;
 
   constructor() {
     this.checkChildrenNodeIds = new Set();
@@ -78,15 +78,15 @@ export class AriaExpandedOptimizer implements Optimizer {
     if (childrenStyleBefore.length > 0 && childrenStyleAfter.length > 0) {
       for (let i = 0; i < node.children.length; ++i) {
         const serializedRuleSet = new Set();
-        for (const ruleMatch of childrenStyleBefore[i].matchedCSSRules) {
+        for (const ruleMatch of childrenStyleBefore[i].matched) {
           serializedRuleSet.add(JSON.stringify(ruleMatch));
         }
-        for (const ruleMatch of childrenStyleAfter[i].matchedCSSRules) {
+        for (const ruleMatch of childrenStyleAfter[i].matched) {
           if (!serializedRuleSet.has(JSON.stringify(ruleMatch))) {
             // TODO: parse selector to determine pseudo class
             const selector = `#${node.id}:hover > #${node.children[i].id}`;
             if (!rules[selector]) rules[selector] = [];
-            rules[selector].push(...parseCSSProperties(ruleMatch.rule.style));
+            rules[selector].push(...ruleMatch.properties);
           }
         }
       }
