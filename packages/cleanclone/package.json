@@ -1,6 +1,6 @@
 {
   "name": "cleanclone",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Inline DevTool-parsed CSS for any website and crawl it on the fly.",
   "license": "MIT",
   "files": [
