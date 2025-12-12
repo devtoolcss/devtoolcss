@@ -1,9 +1,16 @@
-name: Publish Package to npmjs
+name: Publish Package(s) to npmjs
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Name of the package to publish (e.g. uiexport)"
+        required: true
+        type: string
+
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,12 +30,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm -r publish --no-git-checks
+      - name: Publish all packages (on release)
+        if: github.event_name == 'release'
+        run: pnpm -r publish --no-git-checks
 
       - name: Zip dist/uiexport
+        if: github.event_name == 'release'
         run: |
           cd packages/uiexport/dist && zip -r uiexport.zip . && mv uiexport.zip ../../..
+
       - name: Upload extension to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: uiexport.zip
+
+      - name: Publish single package (on manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm publish --filter ${{ github.event.inputs.package }} --no-git-checks
