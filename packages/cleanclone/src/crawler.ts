@@ -489,11 +489,12 @@ export class Crawler extends EventEmitter {
     const { element: body } = await getInlinedComponent(
       "body",
       inspector,
-      (completed, total) => {
+      (completed, total, deviceIndex) => {
         this.emitProgress({
           crawlProgress: {
             processedElements: completed,
             totalElements: total,
+            deviceIndex,
           },
         });
       },

@@ -479,7 +479,11 @@ function getFreezedCdpTree(cdpNode: CDPNode): CDPNodeWithId {
 async function getInlinedComponent(
   selector: string,
   inspector: Inspector,
-  onProgress: (completed: number, total: number) => void = () => {},
+  onProgress: (
+    completed: number,
+    total: number,
+    deviceIndex: number,
+  ) => void = () => {},
   onError: (e: any) => void = () => {},
   options: InlineOptions = {},
 ): Promise<{ element: Element; rootStyle?: Element }> {
@@ -568,7 +572,7 @@ async function getInlinedComponent(
           removeUnusedVar: true,
         });
         await inspector.forcePseudoState(inspectorElement, []); // reset forced pseudo states
-        onProgress(++completed, total);
+        onProgress(++completed, total, i);
       },
       onError,
       -1,
